@@ -1,5 +1,3 @@
-#twilio_setup.py
-
 import os
 import sys
 from twilio.rest import Client
@@ -44,7 +42,7 @@ def check_environment():
     
     if len(warnings) == 2:
         print("⚠️  Warning: No AI service API keys found (GEMINI_API_KEY, GROQ_API_KEY)")
-        print("At least one is required for the CA agent to function properly.")
+        print("At least one is required for the Tax Filing Voice Agent to function properly.")
         return False
     elif warnings:
         print(f"ℹ️  Info: {warnings[0]} not set, will use available AI service")
@@ -52,19 +50,20 @@ def check_environment():
     return True
 
 def check_knowledge_base():
-    """Check if the CA financial knowledge base is set up"""
+    """Check if the tax filing knowledge base is set up"""
     try:
         import chromadb
         from chromadb.utils import embedding_functions
         
-        client = chromadb.PersistentClient(path="./chroma_financial_db")
+        client = chromadb.PersistentClient(path="./chroma_tax_filing_db")
         embedding_function = embedding_functions.DefaultEmbeddingFunction()
         
         collections_to_check = [
-            "financial_knowledge", 
-            "tax_rules", 
-            "investment_advice", 
-            "stock_analysis"
+            "tax_filing_basics", 
+            "income_categories", 
+            "tax_regimes", 
+            "itr_forms", 
+            "deductions_exemptions"
         ]
         
         available_collections = []
@@ -84,15 +83,15 @@ def check_knowledge_base():
                 continue
         
         if not available_collections:
-            print("❌ Error: CA financial knowledge base not found.")
+            print("❌ Error: Tax filing knowledge base not found.")
             print("Please run the knowledge base setup first:")
-            print("python financial_knowledge_setup.py")
+            print("python tax_filing_knowledge_setup.py")
             return False
         
-        print(f"✅ CA Financial Knowledge Base found:")
+        print(f"✅ Tax Filing Knowledge Base found:")
         for collection in available_collections:
             print(f"   📚 {collection}")
-        print(f"   📊 Total: {total_documents} financial documents")
+        print(f"   📊 Total: {total_documents} tax documents")
         return True
         
     except Exception as e:
@@ -177,7 +176,7 @@ def test_flask_app(ngrok_url):
     try:
         test_endpoints = [
             ("/health", "Health check"),
-            ("/webhook-test", "Webhook test")
+            ("/test", "Test interface")
         ]
         
         print("🧪 Testing Flask application...")
@@ -196,11 +195,11 @@ def test_flask_app(ngrok_url):
         
     except Exception as e:
         print(f"⚠️  Flask app test failed: {str(e)}")
-        print("Make sure to start Flask app with: python app.py")
+        print("Make sure to start Flask app with: python tax_filing_app.py")
         return False
 
 def setup_twilio_phone(ngrok_url):
-    """Configure Twilio phone number for CA voice agent"""
+    """Configure Twilio phone number for Tax Filing Voice Agent"""
     if not check_environment():
         return None
     
@@ -223,7 +222,7 @@ def setup_twilio_phone(ngrok_url):
         
         if not numbers:
             print("\n📞 No phone numbers found in your Twilio account.")
-            print("You need to purchase a phone number for the CA voice service.")
+            print("You need to purchase a phone number for the Tax Filing Voice service.")
             
             # Search for available numbers
             countries = [
@@ -311,7 +310,7 @@ def setup_twilio_phone(ngrok_url):
                 print(f"{i}. {number.phone_number} ({number.friendly_name})")
             
             if len(numbers) == 1:
-                choice = input("\nConfigure {numbers[0].phone_number} for CA service? (y/n): ").strip().lower()
+                choice = input(f"\nConfigure {numbers[0].phone_number} for Tax Filing Voice service? (y/n): ").strip().lower()
                 if choice in ['y', 'yes']:
                     selected_number = numbers[0]
                 else:
@@ -352,7 +351,7 @@ def setup_twilio_phone(ngrok_url):
 def display_final_instructions(phone_number, ngrok_url):
     """Display final setup instructions"""
     print("\n" + "=" * 70)
-    print("🎉 CA VOICE RAG AGENT SETUP COMPLETED!")
+    print("🎉 TAX FILING VOICE RAG AGENT SETUP COMPLETED!")
     print("=" * 70)
     
     if phone_number:
@@ -360,58 +359,55 @@ def display_final_instructions(phone_number, ngrok_url):
     print(f"🌐 Webhook URL: {ngrok_url}/voice")
     print(f"🔍 Test Interface: {ngrok_url}/test")
     print(f"📊 Health Check: {ngrok_url}/health")
-    print(f"📈 Analytics: {ngrok_url}/analytics")
     
     print("\n📋 NEXT STEPS:")
     print("1. Keep this terminal running to maintain ngrok tunnel")
-    print("2. Start Flask app: python app.py")
+    print("2. Start Flask app: python tax_filing_app.py")
     if phone_number:
-        print(f"3. Call {phone_number} to test the CA voice agent")
-    print("4. Ask about tax planning, investments, stock analysis")
+        print(f"3. Call {phone_number} to test the Tax Filing Voice Agent")
+    print("4. Ask about tax filing, ITR forms, tax regimes, and deductions")
     
     print("\n💡 SAMPLE QUESTIONS TO ASK:")
-    print("• How can I save tax under Section 80C?")
-    print("• What's the best investment for a 30-year-old?")
+    print("• How do I file my income tax return?")
+    print("• Which ITR form should I use for salary and rental income?")
     print("• Should I choose old or new tax regime?")
-    print("• Which mutual funds are good for SIP?")
-    print("• How much should I invest in ELSS?")
-    print("• What's the current market outlook?")
-    print("• Suggest a retirement plan based on my profile")
-    print("• Investment plan for 10 years")
+    print("• What deductions can I claim under Section 80C?")
+    print("• What's the penalty for late filing?")
+    print("• How to verify my ITR filing?")
+    print("• What documents do I need for ITR filing?")
+    print("• How is capital gains taxed?")
     
     print("\n🔧 TECHNICAL FEATURES:")
     print("✓ Gemini Live API (fast responses)")
     print("✓ Groq API (fallback mechanism)")
-    print("✓ Real-time stock data integration")
-    print("✓ Persistent ChromaDB storage")
-    print("✓ Automated financial news crawling")
-    print("✓ Age, Income, Savings-based personalization")
-    print("✓ Investment horizon follow-up")
+    print("✓ Persistent ChromaDB storage for tax data")
+    print("✓ Automated tax news crawling")
+    print("✓ Age, income, and source-based personalization")
     print("✓ Tax regime optimization")
+    print("✓ ITR form recommendation")
     
     print("\n⚠️  IMPORTANT NOTES:")
-    print("• This provides general financial guidance")
-    print("• For complex decisions, consult a qualified CA")
+    print("• This provides general tax filing guidance")
+    print("• For complex tax cases, consult a qualified CA")
     print("• Voice responses are optimized for clarity")
     print("• Knowledge base updates automatically")
-    print("• Agent collects profile info on first call")
+    print("• Agent collects profile info (age, income sources) on call")
     
-    print(f"\n🚀 Your CA Voice RAG Agent is ready!")
+    print(f"\n🚀 Your Tax Filing Voice RAG Agent is ready!")
     print("Press Ctrl+C to stop the ngrok tunnel")
 
 def main():
     """Main setup function"""
-    print("🏛️  CA VOICE RAG AGENT - TWILIO SETUP")
+    print("🏛️  TAX FILING VOICE RAG AGENT - TWILIO SETUP")
     print("=" * 50)
-    print("This will set up a voice-based CA advisory system")
+    print("This will set up a voice-based tax filing advisory system")
     print("Clients can call to get:")
-    print("• Tax planning and compliance advice")
-    print("• Investment recommendations and analysis")
-    print("• Stock market insights and suggestions")
-    print("• Portfolio optimization strategies")
-    print("• SIP and mutual fund guidance")
-    print("• Financial goal planning")
-    print("• Personalized retirement & investment plans")
+    print("• Tax filing procedures and requirements")
+    print("• ITR form selection guidance")
+    print("• Old vs New tax regime comparison")
+    print("• Deductions and exemptions advice")
+    print("• Income categorization support")
+    print("• Penalty and due date information")
     print("=" * 50)
     
     # Step 1: Check environment variables
@@ -426,10 +422,10 @@ def main():
         return
     
     # Step 2: Check knowledge base
-    print("\n🔍 Step 2: Checking CA financial knowledge base...")
+    print("\n🔍 Step 2: Checking tax filing knowledge base...")
     if not check_knowledge_base():
-        print("\n❌ Setup cannot continue without financial knowledge base")
-        print("Run: python financial_knowledge_setup.py")
+        print("\n❌ Setup cannot continue without tax filing knowledge base")
+        print("Run: python tax_filing_knowledge_setup.py")
         return
     
     print("\n✅ Environment and knowledge base checks passed")
@@ -447,7 +443,7 @@ def main():
     flask_running = test_flask_app(ngrok_url)
     if not flask_running:
         print("\n⚠️  Flask app is not responding")
-        print("Make sure to run: python app.py")
+        print("Make sure to run: python tax_filing_app.py")
         print("You can continue setup and start Flask later")
     
     # Step 5: Configure Twilio phone number
@@ -469,12 +465,12 @@ def main():
                 except:
                     pass
         except KeyboardInterrupt:
-            print("\n\n👋 Shutting down CA Voice RAG Agent setup...")
+            print("\n\n👋 Shutting down Tax Filing Voice RAG Agent setup...")
             print("The phone number configuration is saved in Twilio")
             print("You can run this setup again anytime to get a new tunnel")
             print("\nTo restart the service:")
             print("1. Run: python twilio_setup.py")
-            print("2. Run: python app.py")
+            print("2. Run: python tax_filing_app.py")
     else:
         print("\n⚠️  Phone number configuration incomplete")
         print("You can configure manually in Twilio console:")
