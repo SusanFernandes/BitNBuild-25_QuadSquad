@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -12,6 +12,9 @@ import asyncio
 import tempfile
 import os
 from pathlib import Path
+import sqlite3
+import hashlib
+import uuid
 
 from dotenv import load_dotenv
 
@@ -69,6 +72,238 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Database setup
+DATABASE_PATH = "./financial_reports.db"
+
+def init_database():
+    """Initialize SQLite database with tables for storing reports"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    # Table for transaction analyses
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS transaction_analyses (
+            id TEXT PRIMARY KEY,
+            file_hash TEXT,
+            filename TEXT,
+            analysis_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            transactions_data TEXT,
+            summary_data TEXT,
+            total_transactions INTEGER,
+            total_income REAL,
+            total_expenses REAL,
+            date_range_start TEXT,
+            date_range_end TEXT
+        )
+    ''')
+    
+    # Table for tax analyses
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS tax_analyses (
+            id TEXT PRIMARY KEY,
+            analysis_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            annual_income REAL,
+            current_investments TEXT,
+            old_regime_tax REAL,
+            new_regime_tax REAL,
+            recommendations TEXT,
+            deductions_available TEXT
+        )
+    ''')
+    
+    # Table for CIBIL analyses
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS cibil_analyses (
+            id TEXT PRIMARY KEY,
+            file_hash TEXT,
+            filename TEXT,
+            analysis_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            current_score INTEGER,
+            factors TEXT,
+            recommendations TEXT,
+            improvement_potential INTEGER
+        )
+    ''')
+    
+    # Table for chat queries
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS chat_queries (
+            id TEXT PRIMARY KEY,
+            query_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            question TEXT,
+            answer TEXT,
+            user_context TEXT,
+            sources_used INTEGER,
+            confidence TEXT
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+def get_file_hash(content: bytes) -> str:
+    """Generate hash for file content to detect duplicates"""
+    return hashlib.sha256(content).hexdigest()
+
+def save_transaction_analysis(file_hash: str, filename: str, transactions: List[Dict], summary: Dict) -> str:
+    """Save transaction analysis to database"""
+    analysis_id = str(uuid.uuid4())
+    
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO transaction_analyses 
+        (id, file_hash, filename, transactions_data, summary_data, total_transactions, 
+         total_income, total_expenses, date_range_start, date_range_end)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        analysis_id,
+        file_hash,
+        filename,
+        json.dumps(transactions),
+        json.dumps(summary),
+        summary.get('total_transactions', 0),
+        summary.get('total_income', 0.0),
+        summary.get('total_expenses', 0.0),
+        summary.get('date_range', {}).get('start'),
+        summary.get('date_range', {}).get('end')
+    ))
+    
+    conn.commit()
+    conn.close()
+    
+    return analysis_id
+
+def save_tax_analysis(annual_income: float, investments: str, old_tax: float, 
+                     new_tax: float, recommendations: List[str], deductions: Dict) -> str:
+    """Save tax analysis to database"""
+    analysis_id = str(uuid.uuid4())
+    
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO tax_analyses 
+        (id, annual_income, current_investments, old_regime_tax, new_regime_tax, 
+         recommendations, deductions_available)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        analysis_id,
+        annual_income,
+        investments,
+        old_tax,
+        new_tax,
+        json.dumps(recommendations),
+        json.dumps(deductions)
+    ))
+    
+    conn.commit()
+    conn.close()
+    
+    return analysis_id
+
+def save_cibil_analysis(file_hash: str, filename: str, score: Optional[int], 
+                       factors: Dict, recommendations: List[str], improvement: int) -> str:
+    """Save CIBIL analysis to database"""
+    analysis_id = str(uuid.uuid4())
+    
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO cibil_analyses 
+        (id, file_hash, filename, current_score, factors, recommendations, improvement_potential)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        analysis_id,
+        file_hash,
+        filename,
+        score,
+        json.dumps(factors),
+        json.dumps(recommendations),
+        improvement
+    ))
+    
+    conn.commit()
+    conn.close()
+    
+    return analysis_id
+
+def save_chat_query(question: str, answer: str, user_context: Optional[Dict], 
+                   sources_used: int, confidence: str) -> str:
+    """Save chat query to database"""
+    query_id = str(uuid.uuid4())
+    
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO chat_queries 
+        (id, question, answer, user_context, sources_used, confidence)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (
+        query_id,
+        question,
+        answer,
+        json.dumps(user_context) if user_context else None,
+        sources_used,
+        confidence
+    ))
+    
+    conn.commit()
+    conn.close()
+    
+    return query_id
+
+def get_existing_transaction_analysis(file_hash: str) -> Optional[Dict]:
+    """Check if analysis already exists for this file"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT transactions_data, summary_data 
+        FROM transaction_analyses 
+        WHERE file_hash = ? 
+        ORDER BY analysis_date DESC 
+        LIMIT 1
+    ''', (file_hash,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        return {
+            'transactions': json.loads(result[0]),
+            'summary': json.loads(result[1])
+        }
+    return None
+
+def get_existing_cibil_analysis(file_hash: str) -> Optional[Dict]:
+    """Check if CIBIL analysis already exists for this file"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT current_score, factors, recommendations, improvement_potential 
+        FROM cibil_analyses 
+        WHERE file_hash = ? 
+        ORDER BY analysis_date DESC 
+        LIMIT 1
+    ''', (file_hash,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        return {
+            'current_score': result[0],
+            'factors': json.loads(result[1]),
+            'recommendations': json.loads(result[2]),
+            'improvement_potential': result[3]
+        }
+    return None
+
 # Initialize components conditionally
 if CHROMADB_AVAILABLE:
     try:
@@ -108,6 +343,13 @@ class CIBILAnalysis(BaseModel):
 class ChatQuery(BaseModel):
     question: str
     user_context: Optional[Dict] = None
+
+class ReportSummary(BaseModel):
+    id: str
+    type: str
+    created_date: str
+    filename: Optional[str] = None
+    summary: Dict[str, Any]
 
 # Financial categories for transaction classification
 FINANCIAL_CATEGORIES = {
@@ -279,6 +521,9 @@ async def startup_event():
     os.makedirs("./uploads", exist_ok=True)
     os.makedirs("./chroma_db", exist_ok=True)
     
+    # Initialize database
+    init_database()
+    
     # Initialize with some basic financial knowledge
     if CHROMADB_AVAILABLE:
         basic_knowledge = [
@@ -319,6 +564,8 @@ async def upload_statements(files: List[UploadFile] = File(...)):
         raise HTTPException(status_code=422, detail="No files provided")
     
     all_transactions = []
+    combined_file_hash = ""
+    filenames = []
     
     try:
         for file in files:
@@ -333,6 +580,9 @@ async def upload_statements(files: List[UploadFile] = File(...)):
             
             if len(content) == 0:
                 continue
+            
+            filenames.append(file.filename)
+            combined_file_hash += get_file_hash(content)
                 
             file_extension = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
             
@@ -371,6 +621,18 @@ async def upload_statements(files: List[UploadFile] = File(...)):
         if not all_transactions:
             raise HTTPException(status_code=422, detail="No valid transactions found in uploaded files")
         
+        # Generate hash for all files combined
+        final_file_hash = hashlib.sha256(combined_file_hash.encode()).hexdigest()
+        
+        # Check if analysis already exists
+        existing_analysis = get_existing_transaction_analysis(final_file_hash)
+        if existing_analysis:
+            print(f"Returning cached analysis for files: {', '.join(filenames)}")
+            return TransactionData(
+                transactions=existing_analysis['transactions'],
+                summary=existing_analysis['summary']
+            )
+        
         # Categorize transactions
         for transaction in all_transactions:
             transaction['category'] = processor.categorize_transaction(transaction.get('description', ''))
@@ -406,6 +668,16 @@ async def upload_statements(files: List[UploadFile] = File(...)):
                     'end': df_transactions['date'].max().isoformat() if not pd.isna(df_transactions['date'].max()) else None
                 }
             }
+        
+        # Save analysis to database
+        analysis_id = save_transaction_analysis(
+            final_file_hash,
+            ', '.join(filenames),
+            all_transactions,
+            summary
+        )
+        
+        print(f"Saved transaction analysis with ID: {analysis_id}")
         
         return TransactionData(transactions=all_transactions, summary=summary)
         
@@ -456,6 +728,18 @@ async def analyze_tax(
         if available_deductions['80D'] > 0:
             recommendations.append(f"Consider health insurance for ₹{available_deductions['80D']:,.0f} deduction")
         
+        # Save analysis to database
+        analysis_id = save_tax_analysis(
+            annual_income,
+            current_investments,
+            old_regime['total_tax'],
+            new_regime['total_tax'],
+            recommendations,
+            available_deductions
+        )
+        
+        print(f"Saved tax analysis with ID: {analysis_id}")
+        
         return TaxAnalysis(
             old_regime_tax=old_regime['total_tax'],
             new_regime_tax=new_regime['total_tax'],
@@ -474,6 +758,13 @@ async def analyze_cibil(file: UploadFile = File(...)):
     """Analyze CIBIL report and provide improvement suggestions"""
     try:
         content = await file.read()
+        file_hash = get_file_hash(content)
+        
+        # Check if analysis already exists
+        existing_analysis = get_existing_cibil_analysis(file_hash)
+        if existing_analysis:
+            print(f"Returning cached CIBIL analysis for file: {file.filename}")
+            return CIBILAnalysis(**existing_analysis)
         
         # Extract text from CIBIL report
         if file.filename.endswith('.pdf'):
@@ -508,6 +799,18 @@ async def analyze_cibil(file: UploadFile = File(...)):
         if 'missed' in str(factors['payment_history']).lower():
             recommendations.append("Ensure all EMIs and credit card payments are on time")
             improvement_potential += 80
+        
+        # Save analysis to database
+        analysis_id = save_cibil_analysis(
+            file_hash,
+            file.filename,
+            cibil_data.get('score'),
+            factors,
+            recommendations,
+            min(improvement_potential, 100)
+        )
+        
+        print(f"Saved CIBIL analysis with ID: {analysis_id}")
         
         return CIBILAnalysis(
             current_score=cibil_data.get('score'),
@@ -595,77 +898,85 @@ async def chat_query(query: ChatQuery):
         
         # Check if required services are available
         if not GROQ_AVAILABLE:
-            return {
-                "answer": "AI chat is currently unavailable. Please install the 'groq' library and set GROQ_API_KEY.",
-                "sources_used": 0,
-                "confidence": "low"
-            }
-        
-        if not os.getenv("GROQ_API_KEY"):
-            return {
-                "answer": "AI chat is currently unavailable. Please set up GROQ_API_KEY environment variable.",
-                "sources_used": 0,
-                "confidence": "low"
-            }
-        
-        context = ""
-        sources_used = 0
-        
-        # Search vector database if available
-        if CHROMADB_AVAILABLE:
+            answer = "AI chat is currently unavailable. Please install the 'groq' library and set GROQ_API_KEY."
+            sources_used = 0
+            confidence = "low"
+        elif not os.getenv("GROQ_API_KEY"):
+            answer = "AI chat is currently unavailable. Please set up GROQ_API_KEY environment variable."
+            sources_used = 0
+            confidence = "low"
+        else:
+            context = ""
+            sources_used = 0
+            
+            # Search vector database if available
+            if CHROMADB_AVAILABLE:
+                try:
+                    query_embedding = embedding_model.encode([query.question])
+                    results = collection.query(
+                        query_embeddings=query_embedding.tolist(),
+                        n_results=5
+                    )
+                    context = "\n".join(results['documents'][0]) if results.get('documents') and results['documents'][0] else ""
+                    sources_used = len(results['documents'][0]) if results.get('documents') else 0
+                except Exception as e:
+                    print(f"Vector search error: {e}")
+            
+            # Prepare system prompt
+            system_prompt = f"""
+            You are a financial advisor AI assistant specializing in Indian tax laws and personal finance.
+            Use the following context from updated financial knowledge and user data to provide accurate, personalized advice.
+            
+            Context from knowledge base:
+            {context}
+            
+            User context (if provided):
+            {json.dumps(query.user_context) if query.user_context else 'No user context provided'}
+            
+            Guidelines:
+            - Provide specific, actionable advice
+            - Mention relevant sections of tax law when applicable
+            - If uncertain about current laws, recommend consulting a tax professional
+            - Keep responses concise but comprehensive
+            - Use Indian currency (₹) and tax year format
+            """
+            
             try:
-                query_embedding = embedding_model.encode([query.question])
-                results = collection.query(
-                    query_embeddings=query_embedding.tolist(),
-                    n_results=5
+                # Call Groq API
+                completion = groq_client.chat.completions.create(
+                    model="llama-3.1-8b-instant",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": query.question}
+                    ],
+                    temperature=0.1,
+                    max_tokens=1000
                 )
-                context = "\n".join(results['documents'][0]) if results.get('documents') and results['documents'][0] else ""
-                sources_used = len(results['documents'][0]) if results.get('documents') else 0
-            except Exception as e:
-                print(f"Vector search error: {e}")
+                
+                answer = completion.choices[0].message.content
+                confidence = "high" if context else "medium"
+                
+            except Exception as groq_error:
+                print(f"Groq API error: {groq_error}")
+                # Fallback response
+                answer = f"I understand you're asking about: {query.question}. However, I'm currently unable to access the AI service. For tax-related queries, I recommend consulting with a qualified tax professional or checking the latest information on incometax.gov.in"
+                confidence = "low"
         
-        # Prepare system prompt
-        system_prompt = f"""
-        You are a financial advisor AI assistant specializing in Indian tax laws and personal finance.
-        Use the following context from updated financial knowledge and user data to provide accurate, personalized advice.
+        # Save chat query to database
+        query_id = save_chat_query(
+            query.question,
+            answer,
+            query.user_context,
+            sources_used,
+            confidence
+        )
         
-        Context from knowledge base:
-        {context}
-        
-        User context (if provided):
-        {json.dumps(query.user_context) if query.user_context else 'No user context provided'}
-        
-        Guidelines:
-        - Provide specific, actionable advice
-        - Mention relevant sections of tax law when applicable
-        - If uncertain about current laws, recommend consulting a tax professional
-        - Keep responses concise but comprehensive
-        - Use Indian currency (₹) and tax year format
-        """
-        
-        try:
-            # Call Groq API
-            completion = groq_client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": query.question}
-                ],
-                temperature=0.1,
-                max_tokens=1000
-            )
-            
-            response = completion.choices[0].message.content
-            
-        except Exception as groq_error:
-            print(f"Groq API error: {groq_error}")
-            # Fallback response
-            response = f"I understand you're asking about: {query.question}. However, I'm currently unable to access the AI service. For tax-related queries, I recommend consulting with a qualified tax professional or checking the latest information on incometax.gov.in"
+        print(f"Saved chat query with ID: {query_id}")
         
         return {
-            "answer": response,
+            "answer": answer,
             "sources_used": sources_used,
-            "confidence": "high" if context else "medium"
+            "confidence": confidence
         }
         
     except HTTPException:
@@ -673,6 +984,271 @@ async def chat_query(query: ChatQuery):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error processing query: {str(e)}")
 
+# New endpoints for fetching saved reports
+
+@app.get("/reports/list")
+async def list_reports(
+    report_type: Optional[str] = Query(None, description="Filter by report type: transaction, tax, cibil, chat"),
+    limit: int = Query(10, description="Number of reports to return"),
+    offset: int = Query(0, description="Offset for pagination")
+):
+    """List all saved reports with pagination"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    reports = []
+    
+    try:
+        # Transaction reports
+        if not report_type or report_type == "transaction":
+            cursor.execute('''
+                SELECT id, filename, analysis_date, total_transactions, total_income, total_expenses
+                FROM transaction_analyses 
+                ORDER BY analysis_date DESC 
+                LIMIT ? OFFSET ?
+            ''', (limit, offset))
+            
+            for row in cursor.fetchall():
+                reports.append({
+                    'id': row[0],
+                    'type': 'transaction',
+                    'filename': row[1],
+                    'created_date': row[2],
+                    'summary': {
+                        'total_transactions': row[3],
+                        'total_income': row[4],
+                        'total_expenses': row[5]
+                    }
+                })
+        
+        # Tax reports
+        if not report_type or report_type == "tax":
+            cursor.execute('''
+                SELECT id, analysis_date, annual_income, old_regime_tax, new_regime_tax
+                FROM tax_analyses 
+                ORDER BY analysis_date DESC 
+                LIMIT ? OFFSET ?
+            ''', (limit, offset))
+            
+            for row in cursor.fetchall():
+                reports.append({
+                    'id': row[0],
+                    'type': 'tax',
+                    'filename': None,
+                    'created_date': row[1],
+                    'summary': {
+                        'annual_income': row[2],
+                        'old_regime_tax': row[3],
+                        'new_regime_tax': row[4]
+                    }
+                })
+        
+        # CIBIL reports
+        if not report_type or report_type == "cibil":
+            cursor.execute('''
+                SELECT id, filename, analysis_date, current_score, improvement_potential
+                FROM cibil_analyses 
+                ORDER BY analysis_date DESC 
+                LIMIT ? OFFSET ?
+            ''', (limit, offset))
+            
+            for row in cursor.fetchall():
+                reports.append({
+                    'id': row[0],
+                    'type': 'cibil',
+                    'filename': row[1],
+                    'created_date': row[2],
+                    'summary': {
+                        'current_score': row[3],
+                        'improvement_potential': row[4]
+                    }
+                })
+        
+        # Chat queries
+        if not report_type or report_type == "chat":
+            cursor.execute('''
+                SELECT id, query_date, question, sources_used, confidence
+                FROM chat_queries 
+                ORDER BY query_date DESC 
+                LIMIT ? OFFSET ?
+            ''', (limit, offset))
+            
+            for row in cursor.fetchall():
+                reports.append({
+                    'id': row[0],
+                    'type': 'chat',
+                    'filename': None,
+                    'created_date': row[1],
+                    'summary': {
+                        'question': row[2][:100] + "..." if len(row[2]) > 100 else row[2],
+                        'sources_used': row[3],
+                        'confidence': row[4]
+                    }
+                })
+        
+        # Sort all reports by date
+        reports.sort(key=lambda x: x['created_date'], reverse=True)
+        
+        return {
+            "reports": reports[:limit],
+            "total_count": len(reports),
+            "has_more": len(reports) > limit
+        }
+        
+    finally:
+        conn.close()
+
+@app.get("/reports/transaction/{report_id}")
+async def get_transaction_report(report_id: str):
+    """Get detailed transaction analysis report"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT transactions_data, summary_data, filename, analysis_date
+            FROM transaction_analyses 
+            WHERE id = ?
+        ''', (report_id,))
+        
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="Transaction report not found")
+        
+        return {
+            'id': report_id,
+            'transactions': json.loads(result[0]),
+            'summary': json.loads(result[1]),
+            'filename': result[2],
+            'created_date': result[3]
+        }
+        
+    finally:
+        conn.close()
+
+@app.get("/reports/tax/{report_id}")
+async def get_tax_report(report_id: str):
+    """Get detailed tax analysis report"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT annual_income, current_investments, old_regime_tax, new_regime_tax, 
+                   recommendations, deductions_available, analysis_date
+            FROM tax_analyses 
+            WHERE id = ?
+        ''', (report_id,))
+        
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="Tax report not found")
+        
+        return {
+            'id': report_id,
+            'annual_income': result[0],
+            'current_investments': json.loads(result[1]) if result[1] else {},
+            'old_regime_tax': result[2],
+            'new_regime_tax': result[3],
+            'recommendations': json.loads(result[4]),
+            'deductions_available': json.loads(result[5]),
+            'created_date': result[6]
+        }
+        
+    finally:
+        conn.close()
+
+@app.get("/reports/cibil/{report_id}")
+async def get_cibil_report(report_id: str):
+    """Get detailed CIBIL analysis report"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT current_score, factors, recommendations, improvement_potential, 
+                   filename, analysis_date
+            FROM cibil_analyses 
+            WHERE id = ?
+        ''', (report_id,))
+        
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="CIBIL report not found")
+        
+        return {
+            'id': report_id,
+            'current_score': result[0],
+            'factors': json.loads(result[1]),
+            'recommendations': json.loads(result[2]),
+            'improvement_potential': result[3],
+            'filename': result[4],
+            'created_date': result[5]
+        }
+        
+    finally:
+        conn.close()
+
+@app.get("/reports/chat/{query_id}")
+async def get_chat_query(query_id: str):
+    """Get detailed chat query and response"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT question, answer, user_context, sources_used, confidence, query_date
+            FROM chat_queries 
+            WHERE id = ?
+        ''', (query_id,))
+        
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="Chat query not found")
+        
+        return {
+            'id': query_id,
+            'question': result[0],
+            'answer': result[1],
+            'user_context': json.loads(result[2]) if result[2] else None,
+            'sources_used': result[3],
+            'confidence': result[4],
+            'created_date': result[5]
+        }
+        
+    finally:
+        conn.close()
+
+@app.delete("/reports/{report_type}/{report_id}")
+async def delete_report(report_type: str, report_id: str):
+    """Delete a specific report"""
+    if report_type not in ['transaction', 'tax', 'cibil', 'chat']:
+        raise HTTPException(status_code=400, detail="Invalid report type")
+    
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        table_map = {
+            'transaction': 'transaction_analyses',
+            'tax': 'tax_analyses',
+            'cibil': 'cibil_analyses',
+            'chat': 'chat_queries'
+        }
+        
+        table_name = table_map[report_type]
+        
+        cursor.execute(f'DELETE FROM {table_name} WHERE id = ?', (report_id,))
+        
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Report not found")
+        
+        conn.commit()
+        
+        return {"message": f"Report {report_id} deleted successfully"}
+        
+    finally:
+        conn.close()
 
 # Helper functions
 
@@ -847,7 +1423,8 @@ async def health_check():
             "groq": GROQ_AVAILABLE,
             "crawl4ai": CRAWL4AI_AVAILABLE,
             "pdf_processing": PDF_AVAILABLE,
-            "ocr": OCR_AVAILABLE
+            "ocr": OCR_AVAILABLE,
+            "database": os.path.exists(DATABASE_PATH)
         }
     }
 
@@ -863,7 +1440,13 @@ async def root():
             "analyze_tax": "/analyze/tax",
             "analyze_cibil": "/analyze/cibil",
             "update_knowledge": "/search/update-knowledge",
-            "chat_query": "/chat/query"
+            "chat_query": "/chat/query",
+            "list_reports": "/reports/list",
+            "get_transaction_report": "/reports/transaction/{report_id}",
+            "get_tax_report": "/reports/tax/{report_id}",
+            "get_cibil_report": "/reports/cibil/{report_id}",
+            "get_chat_query": "/reports/chat/{query_id}",
+            "delete_report": "/reports/{report_type}/{report_id}"
         },
         "docs": "/docs"
     }
