@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model chat_history {
+  id           String    @id
+  user_id      String?
+  query        String
+  response     String
+  context_used String?
+  created_at   DateTime?
+  users        users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model cibil_data {
+  id                    String    @id
+  user_id               String?
+  current_score         Int?
+  credit_utilization    Float?
+  payment_history_score Int?
+  number_of_accounts    Int?
+  credit_age_months     Int?
+  hard_inquiries        Int?
+  analysis_data         String?
+  recommendations       String?
+  created_at            DateTime?
+  users                 users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model file_uploads {
+  id                String         @id
+  user_id           String?
+  filename          String
+  file_path         String
+  file_type         String
+  file_size         Int?
+  processing_status String?
+  created_at        DateTime?
+  users             users?         @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  transactions      transactions[]
+}
+
+model knowledge_base {
+  id           String    @id
+  title        String
+  content      String
+  source_url   String?
+  category     String?
+  embedding_id String?
+  last_updated DateTime?
+  created_at   DateTime?
+}
+
+model tax_data {
+  id              String    @id
+  user_id         String?
+  financial_year  String
+  total_income    Float?
+  taxable_income  Float?
+  old_regime_tax  Float?
+  new_regime_tax  Float?
+  deductions      String?
+  recommendations String?
+  report_path     String?
+  created_at      DateTime?
+  users           users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model transactions {
+  id               String        @id
+  user_id          String?
+  file_id          String?
+  date             DateTime
+  amount           Float
+  description      String
+  transaction_type String?
+  category         String?
+  subcategory      String?
+  is_recurring     Boolean?
+  confidence_score Float?
+  created_at       DateTime?
+  file_uploads     file_uploads? @relation(fields: [file_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users            users?        @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model users {
+  id            String         @id
+  name          String
+  email         String         @unique(map: "sqlite_autoindex_users_2")
+  phone         String?
+  password_hash String
+  created_at    DateTime?
+  updated_at    DateTime?
+  chat_history  chat_history[]
+  cibil_data    cibil_data[]
+  file_uploads  file_uploads[]
+  tax_data      tax_data[]
+  transactions  transactions[]
+}

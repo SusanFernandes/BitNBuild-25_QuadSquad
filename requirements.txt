@@ -1,0 +1,41 @@
+# FastAPI and server
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Database
+sqlalchemy
+
+# Data processing
+pandas
+numpy<2
+# Ensure docTR is installed for OCR functionality
+python-doctr[torch]
+openpyxl  # For Excel files
+PyPDF2    # Fallback PDF reader
+
+# Document processing with docTR
+python-doctr
+opencv-python
+pillow
+
+# Machine Learning and AI
+chromadb
+groq
+
+# Web scraping
+crawl4ai
+requests
+beautifulsoup4
+
+# PDF generation
+reportlab
+
+# Utilities
+python-dotenv
+pydantic
+python-jose[cryptography]
+passlib[bcrypt]
+python-dateutil
+
+python-dotenv
