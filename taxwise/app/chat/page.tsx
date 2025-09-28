@@ -5,13 +5,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { AccentIconRow, OutlineCard } from "@/components/pastel-accents"
+import Link from "next/link"
 
 export default function Page() {
   return (
     <BrandThemeWrapper>
       <SiteHeader />
       <main className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-8 grid gap-6">
-        <h1 className="text-2xl font-semibold">AI Chat</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">AI Chat</h1>
+          <Button asChild variant="outline">
+            <Link href="/reports?report_type=chat">View Chat History</Link>
+          </Button>
+        </div>
         <ChatAssistant />
 
         {/* Pastel prompt ideas */}

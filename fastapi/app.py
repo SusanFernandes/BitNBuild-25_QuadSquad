@@ -1,3 +1,4 @@
+from urllib.request import Request
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -253,7 +254,7 @@ def save_chat_query(question: str, answer: str, user_context: Optional[Dict],
     
     conn.commit()
     conn.close()
-    
+                    
     return query_id
 
 def get_existing_transaction_analysis(file_hash: str) -> Optional[Dict]:
@@ -1450,6 +1451,13 @@ async def root():
         },
         "docs": "/docs"
     }
+
+@app.middleware("http")
+async def log_body(request: Request, call_next):
+    body = await request.body()
+    print("RAW BODY:", body.decode())   # ← will show the form string
+    response = await call_next(request)
+    return response
 
 if __name__ == "__main__":
     import uvicorn

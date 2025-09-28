@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import Link from "next/link"
 
 type TaxResponse = {
   old_regime_tax: number
@@ -16,6 +18,12 @@ type TaxResponse = {
   recommendations: string[]
   deductions_available: Record<string, number>
 }
+
+const quickScenarios = [
+  { label: "₹8L + 80C ₹1.5L", income: "800000", s80c: "150000" },
+  { label: "₹12L + 80C ₹1.5L", income: "1200000", s80c: "150000" },
+  { label: "₹15L + Full Deductions", income: "1500000", s80c: "150000", s80d: "25000", s24b: "200000" },
+]
 
 export default function TaxAnalysisForm() {
   const [income, setIncome] = useState<string>("1200000")
@@ -61,6 +69,15 @@ export default function TaxAnalysisForm() {
     }
   }
 
+  const handleQuickScenario = (scenario: typeof quickScenarios[0]) => {
+    setIncome(scenario.income)
+    setS80c(scenario.s80c || "")
+    setS80d(scenario.s80d || "")
+    setS24b(scenario.s24b || "")
+    setS80g("")
+    setResult(null)
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -68,6 +85,23 @@ export default function TaxAnalysisForm() {
         <CardDescription>Compare Old vs New regime and get recommendations.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
+        {/* Quick Scenarios */}
+        <div className="grid gap-2">
+          <Label>Quick Scenarios</Label>
+          <div className="flex flex-wrap gap-2">
+            {quickScenarios.map((scenario, index) => (
+              <Badge
+                key={index}
+                variant="outline"
+                className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                onClick={() => handleQuickScenario(scenario)}
+              >
+                {scenario.label}
+              </Badge>
+            ))}
+          </div>
+        </div>
+
         <form onSubmit={onSubmit} className="grid gap-3">
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="grid gap-2">
@@ -164,6 +198,12 @@ export default function TaxAnalysisForm() {
                   </ul>
                 </CardContent>
               </Card>
+            </div>
+
+            <div className="flex justify-center">
+              <Button asChild variant="outline">
+                <Link href="/reports?report_type=tax">View All Tax Reports</Link>
+              </Button>
             </div>
           </>
         )}

@@ -7,8 +7,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import Link from "next/link"
 
 type Resp = { message?: string }
+
+const suggestedQueries = [
+  "latest income tax rates India 2024",
+  "CIBIL score improvement tips",
+  "tax deduction limits 2024-25",
+  "home loan interest deduction rules"
+]
 
 export default function KnowledgeUpdater() {
   const [query, setQuery] = useState("latest income tax rates India 2024")
@@ -43,6 +51,10 @@ export default function KnowledgeUpdater() {
     }
   }
 
+  const handleSuggestedQuery = (suggestedQuery: string) => {
+    setQuery(suggestedQuery)
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -50,6 +62,22 @@ export default function KnowledgeUpdater() {
         <CardDescription>Fetch latest finance info and update AI memory.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
+        <div className="grid gap-2">
+          <Label>Suggested Queries</Label>
+          <div className="flex flex-wrap gap-2">
+            {suggestedQueries.map((suggestedQuery, index) => (
+              <Button
+                key={index}
+                variant="outline"
+                size="sm"
+                onClick={() => handleSuggestedQuery(suggestedQuery)}
+              >
+                {suggestedQuery}
+              </Button>
+            ))}
+          </div>
+        </div>
+
         <form onSubmit={onSubmit} className="grid gap-3">
           <div className="grid gap-2">
             <Label htmlFor="query">Query</Label>
@@ -64,9 +92,15 @@ export default function KnowledgeUpdater() {
                 {error}
               </span>
             )}
-            {message && <span className="text-sm">{message}</span>}
+            {message && <span className="text-sm text-green-600">{message}</span>}
           </div>
         </form>
+
+        <div className="flex justify-center">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/health">Check API Health</Link>
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )

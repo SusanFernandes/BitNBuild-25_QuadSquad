@@ -37,6 +37,9 @@ export default function LandingPage() {
                 <Button asChild variant="outline">
                   <Link href="/chat">Ask AI</Link>
                 </Button>
+                <Button asChild variant="ghost">
+                  <Link href="/reports">View Reports</Link>
+                </Button>
               </div>
             </div>
             <Card className="md:h-full">

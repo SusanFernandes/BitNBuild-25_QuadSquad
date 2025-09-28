@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import Link from "next/link"
 
 type Health = { status: string; timestamp: string }
 
@@ -55,6 +56,12 @@ export default function HealthCheck() {
             </p>
           </div>
         )}
+
+        <div className="flex justify-center">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/knowledge">Update Knowledge Base</Link>
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )

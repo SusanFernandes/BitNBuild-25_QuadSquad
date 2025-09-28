@@ -10,6 +10,7 @@ const links = [
   { href: "/tax", label: "Tax" },
   { href: "/cibil", label: "CIBIL" },
   { href: "/chat", label: "AI Chat" },
+  { href: "/reports", label: "Reports" },
   { href: "/knowledge", label: "Knowledge" },
   { href: "/health", label: "Health" },
 ]
