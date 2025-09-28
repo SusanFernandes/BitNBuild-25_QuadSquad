@@ -1,17 +1,17 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useParams } from "next/navigation"
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Pie, PieChart, Cell, Bar, BarChart, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer } from "recharts"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import Link from "next/link"
+import { SiteHeader } from "@/components/site-header"
+import { BrandThemeWrapper } from "@/components/brand-theme-wrapper"
+import { ArrowLeft } from "lucide-react"
 
 type Transaction = {
   date: string
@@ -20,95 +20,110 @@ type Transaction = {
   category?: string
 }
 
-type Summary = {
-  total_transactions: number
-  total_income: number
-  total_expenses: number
-  categories: Record<string, number>
-  recurring_count: number
-  date_range: { start: string; end: string }
+type ReportData = {
+  id: string
+  transactions: Transaction[]
+  summary: {
+    total_transactions: number
+    total_income: number
+    total_expenses: number
+    categories: Record<string, number>
+    recurring_count: number
+    date_range: { start: string; end: string }
+  }
+  filename: string
+  created_date: string
 }
 
-export default function StatementsUploader() {
-  const [files, setFiles] = useState<FileList | null>(null)
-  const [loading, setLoading] = useState(false)
+export default function TransactionReportPage() {
+  const params = useParams()
+  const reportId = params.report_id as string
+  const [report, setReport] = useState<ReportData | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [summary, setSummary] = useState<Summary | null>(null)
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    if (!files || files.length === 0) {
-      setError("Please select at least one file.")
-      return
-    }
-    setLoading(true)
-    try {
-      const formData = new FormData()
-      Array.from(files).forEach((f) => formData.append("files", f))
-      const res = await fetch("/api/upload/statements", {
-        method: "POST",
-        body: formData,
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data?.detail || "Upload failed")
+  useEffect(() => {
+    const loadReport = async () => {
+      try {
+        const res = await fetch(`/api/reports/transaction/${reportId}`)
+        const data = await res.json()
+
+        if (!res.ok) throw new Error(data.detail || "Failed to load report")
+
+        setReport(data)
+      } catch (err: any) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
       }
-      setTransactions(data.transactions || [])
-      setSummary(data.summary || null)
-    } catch (err: any) {
-      setError(err.message || "Upload failed")
-    } finally {
-      setLoading(false)
     }
+
+    if (reportId) loadReport()
+  }, [reportId])
+
+  if (loading) {
+    return (
+      <BrandThemeWrapper>
+        <SiteHeader />
+        <main className="min-h-dvh flex items-center justify-center">
+          <p>Loading report...</p>
+        </main>
+      </BrandThemeWrapper>
+    )
   }
 
-  const categoryData = summary ? Object.entries(summary.categories || {}).map(([k, v]) => ({ name: k, value: v })) : []
+  if (error || !report) {
+    return (
+      <BrandThemeWrapper>
+        <SiteHeader />
+        <main className="min-h-dvh">
+          <div className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-8">
+            <div className="flex items-center gap-4 mb-6">
+              <Button asChild variant="outline" size="sm">
+                <Link href="/reports">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back to Reports
+                </Link>
+              </Button>
+            </div>
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-destructive">{error || "Report not found"}</p>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+      </BrandThemeWrapper>
+    )
+  }
 
-  const incomeExpenseData = summary
-    ? [
-        { name: "Income", value: summary.total_income || 0 },
-        { name: "Expenses", value: Math.abs(summary.total_expenses || 0) },
-      ]
-    : []
+  const categoryData = Object.entries(report.summary.categories || {}).map(([k, v]) => ({ name: k, value: v }))
+
+  const incomeExpenseData = [
+    { name: "Income", value: report.summary.total_income || 0 },
+    { name: "Expenses", value: Math.abs(report.summary.total_expenses || 0) },
+  ]
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Upload Statements</CardTitle>
-        <CardDescription>CSV, Excel (.xlsx/.xls), and PDF are supported.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        <form onSubmit={onSubmit} className="grid gap-3">
-          <div className="grid gap-2">
-            <Label htmlFor="files">Files</Label>
-            <Input
-              id="files"
-              type="file"
-              multiple
-              accept=".csv,.xlsx,.xls,.pdf"
-              onChange={(e) => setFiles(e.target.files)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Max 10MB per file. Required columns are flexible: Date, Description, Amount.
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <Button type="submit" disabled={loading}>
-              {loading ? "Analyzing…" : "Analyze Statements"}
+    <BrandThemeWrapper>
+      <SiteHeader />
+      <main className="min-h-dvh">
+        <div className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-8">
+          <div className="flex items-center gap-4 mb-6">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/reports">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Reports
+              </Link>
             </Button>
-            {error && (
-              <span className="text-destructive text-sm" role="alert">
-                {error}
-              </span>
-            )}
+            <div>
+              <h1 className="text-2xl font-semibold">Transaction Report</h1>
+              <p className="text-muted-foreground">Analysis from {report.filename}</p>
+            </div>
           </div>
-        </form>
 
-        {summary && (
-          <>
-            <Separator />
+          <div className="grid gap-6">
+            {/* Summary Cards */}
             <div className="grid gap-4 md:grid-cols-3">
               <Card>
                 <CardHeader>
@@ -116,10 +131,10 @@ export default function StatementsUploader() {
                   <CardDescription>Date range</CardDescription>
                 </CardHeader>
                 <CardContent className="text-sm">
-                  <div className="text-2xl font-semibold">{summary.total_transactions.toLocaleString()}</div>
+                  <div className="text-2xl font-semibold">{report.summary.total_transactions.toLocaleString()}</div>
                   <div className="text-muted-foreground mt-1">
-                    {new Date(summary.date_range.start).toLocaleDateString()} –{" "}
-                    {new Date(summary.date_range.end).toLocaleDateString()}
+                    {new Date(report.summary.date_range.start).toLocaleDateString()} –{" "}
+                    {new Date(report.summary.date_range.end).toLocaleDateString()}
                   </div>
                 </CardContent>
               </Card>
@@ -129,7 +144,7 @@ export default function StatementsUploader() {
                   <CardDescription>All sources</CardDescription>
                 </CardHeader>
                 <CardContent className="text-2xl font-semibold">
-                  ₹ {Math.round(summary.total_income).toLocaleString()}
+                  ₹ {Math.round(report.summary.total_income).toLocaleString()}
                 </CardContent>
               </Card>
               <Card>
@@ -138,11 +153,12 @@ export default function StatementsUploader() {
                   <CardDescription>Across categories</CardDescription>
                 </CardHeader>
                 <CardContent className="text-2xl font-semibold">
-                  ₹ {Math.round(Math.abs(summary.total_expenses)).toLocaleString()}
+                  ₹ {Math.round(Math.abs(report.summary.total_expenses)).toLocaleString()}
                 </CardContent>
               </Card>
             </div>
 
+            {/* Charts */}
             <div className="grid gap-4 md:grid-cols-2">
               <Card>
                 <CardHeader>
@@ -192,10 +208,11 @@ export default function StatementsUploader() {
               </Card>
             </div>
 
+            {/* Transactions Table */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Sample Transactions</CardTitle>
-                <CardDescription>First 10 records</CardDescription>
+                <CardTitle className="text-base">All Transactions</CardTitle>
+                <CardDescription>{report.transactions.length} transactions found</CardDescription>
               </CardHeader>
               <CardContent className="overflow-auto">
                 <Table>
@@ -208,27 +225,23 @@ export default function StatementsUploader() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {transactions.slice(0, 10).map((t, i) => (
+                    {report.transactions.map((t, i) => (
                       <TableRow key={i}>
                         <TableCell>{new Date(t.date).toLocaleDateString()}</TableCell>
                         <TableCell>{t.description}</TableCell>
                         <TableCell className="text-right">{Math.round(t.amount).toLocaleString()}</TableCell>
-                        <TableCell>{t.category || "-"}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{t.category || "uncategorized"}</Badge>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </CardContent>
             </Card>
-
-            <div className="flex justify-center">
-              <Button asChild variant="outline">
-                <Link href="/reports?report_type=transaction">View All Transaction Reports</Link>
-              </Button>
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+          </div>
+        </div>
+      </main>
+    </BrandThemeWrapper>
   )
 }

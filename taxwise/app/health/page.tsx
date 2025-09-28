@@ -25,9 +25,24 @@ export default function Page() {
             {isLoading && "Checking..."}
             {error && <span className="text-destructive">Failed to load health</span>}
             {data && (
-              <div className="grid gap-2">
-                <div>Status: {data.status || "unknown"}</div>
+              <div className="grid gap-4">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${data.status === 'healthy' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                  <span className="font-medium">Status: {data.status || "unknown"}</span>
+                </div>
                 {data.timestamp && <div>Timestamp: {new Date(data.timestamp).toLocaleString()}</div>}
+                
+                <div className="grid gap-2">
+                  <h4 className="font-medium">Services:</h4>
+                  <div className="grid gap-1 pl-4">
+                    {Object.entries(data.services || {}).map(([service, available]) => (
+                      <div key={service} className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${available ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        <span className="capitalize">{service.replace('_', ' ')}: {available ? 'Available' : 'Unavailable'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
           </CardContent>

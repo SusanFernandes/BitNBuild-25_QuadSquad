@@ -55,3 +55,9 @@ export async function forwardGet(_req: Request, path: string) {
   const res = await fetch(url, { method: "GET", cache: "no-store" })
   return res
 }
+
+export async function forwardDelete(_req: Request, path: string) {
+  const url = `${getBaseUrl()}${path}`
+  const res = await fetch(url, { method: "DELETE", cache: "no-store" })
+  return res
+}

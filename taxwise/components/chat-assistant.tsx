@@ -5,12 +5,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import Link from "next/link"
 
 type ChatResponse = {
   answer: string
   sources_used?: number
   confidence?: string
 }
+
+const suggestedPrompts = [
+  "How much can I save by switching tax regimes?",
+  "What are the latest tax deduction limits for 2024-25?",
+  "How to improve CIBIL score from 650 to 750?",
+  "Calculate tax for ₹12 lakh income with 80C deduction",
+  "What documents do I need for tax filing?"
+]
 
 export function ChatAssistant() {
   const [question, setQuestion] = React.useState("")
@@ -44,6 +54,10 @@ export function ChatAssistant() {
     }
   }
 
+  const handleSuggestedPrompt = (prompt: string) => {
+    setQuestion(prompt)
+  }
+
   return (
     <div className="grid gap-6">
       <Card>
@@ -74,6 +88,32 @@ export function ChatAssistant() {
               {loading ? "Thinking..." : "Ask"}
             </Button>
             {error && <span className="text-destructive text-sm">{error}</span>}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Suggested Prompts */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-balance">Suggested Questions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            {suggestedPrompts.map((prompt, index) => (
+              <Badge
+                key={index}
+                variant="outline"
+                className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                onClick={() => handleSuggestedPrompt(prompt)}
+              >
+                {prompt}
+              </Badge>
+            ))}
+          </div>
+          <div className="mt-4">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/reports?report_type=chat">View Chat History</Link>
+            </Button>
           </div>
         </CardContent>
       </Card>

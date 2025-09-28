@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
+import Link from "next/link"
 
 type CibilResponse = {
   current_score: number
@@ -139,6 +140,12 @@ export default function CibilUploader() {
               </CardHeader>
               <CardContent className="text-2xl font-semibold">{result.improvement_potential}%</CardContent>
             </Card>
+
+            <div className="flex justify-center">
+              <Button asChild variant="outline">
+                <Link href="/reports?report_type=cibil">View All CIBIL Reports</Link>
+              </Button>
+            </div>
           </>
         )}
       </CardContent>

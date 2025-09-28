@@ -2,15 +2,22 @@ import { BrandThemeWrapper } from "@/components/brand-theme-wrapper"
 import { SiteHeader } from "@/components/site-header"
 import KnowledgeUpdater from "@/components/knowledge-updater"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { AccentIconRow, OutlineCard } from "@/components/pastel-accents"
+import Link from "next/link"
 
 export default function Page() {
   return (
     <BrandThemeWrapper>
       <SiteHeader />
       <main className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-8 grid gap-6">
-        <h1 className="text-2xl font-semibold">Knowledge</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">Knowledge</h1>
+          <Button asChild variant="outline">
+            <Link href="/health">Check API Health</Link>
+          </Button>
+        </div>
         <KnowledgeUpdater />
 
         {/* What to upload */}
