@@ -1,4 +1,5 @@
 chroma_financial_db
+chroma_tax_filing_db
 financial_data.db
 
 .env

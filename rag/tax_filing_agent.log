@@ -1,0 +1,38 @@
+2025-09-28 12:27:02.784 | INFO     | __main__:setup_collections:286 - Tax Filing ChromaDB collections setup completed
+2025-09-28 12:27:02.845 | INFO     | __main__:setup_database:89 - Tax filing SQLite database setup completed
+2025-09-28 12:27:02.846 | INFO     | __main__:__init__:249 - Tax Filing ChromaDB initialized successfully
+2025-09-28 12:27:02.847 | INFO     | __main__:populate_tax_knowledge_base:290 - Populating tax filing knowledge base...
+2025-09-28 12:27:04.090 | INFO     | __main__:add_tax_filing_basics:362 - Added 5 tax filing basics
+2025-09-28 12:27:04.697 | INFO     | __main__:add_income_categories_knowledge:417 - Added 5 income category details
+2025-09-28 12:27:05.201 | INFO     | __main__:add_tax_regimes_knowledge:464 - Added 4 tax regime details
+2025-09-28 12:27:05.831 | INFO     | __main__:add_itr_forms_knowledge:519 - Added 5 ITR forms knowledge
+2025-09-28 12:27:06.433 | INFO     | __main__:add_deductions_exemptions_knowledge:566 - Added 4 deductions and exemptions
+2025-09-28 12:27:17.256 | INFO     | __main__:crawl_tax_websites:154 - Crawling tax content: https://www.incometaxindia.gov.in/Pages/default.aspx
+2025-09-28 12:27:22.110 | INFO     | __main__:store_tax_content:235 - Stored tax content from Income Tax Department: No title...
+2025-09-28 12:27:22.111 | SUCCESS  | __main__:crawl_tax_websites:185 - Successfully crawled tax content: Income Tax Department
+2025-09-28 12:27:25.112 | INFO     | __main__:crawl_tax_websites:154 - Crawling tax content: https://cleartax.in/s/income-tax-guide
+2025-09-28 12:27:29.020 | INFO     | __main__:store_tax_content:235 - Stored tax content from ClearTax: No title...
+2025-09-28 12:27:29.021 | SUCCESS  | __main__:crawl_tax_websites:185 - Successfully crawled tax content: ClearTax
+2025-09-28 12:27:32.026 | INFO     | __main__:crawl_tax_websites:154 - Crawling tax content: https://cleartax.in/s/itr-forms
+2025-09-28 12:27:35.674 | INFO     | __main__:store_tax_content:235 - Stored tax content from ClearTax: No title...
+2025-09-28 12:27:35.674 | SUCCESS  | __main__:crawl_tax_websites:185 - Successfully crawled tax content: ClearTax
+2025-09-28 12:27:38.688 | INFO     | __main__:crawl_tax_websites:154 - Crawling tax content: https://www.bankbazaar.com/tax/income-tax-slabs.html
+2025-09-28 12:27:41.572 | INFO     | __main__:store_tax_content:235 - Stored tax content from BankBazaar: No title...
+2025-09-28 12:27:41.573 | SUCCESS  | __main__:crawl_tax_websites:185 - Successfully crawled tax content: BankBazaar
+2025-09-28 12:27:44.575 | INFO     | __main__:crawl_tax_websites:154 - Crawling tax content: https://groww.in/blog/category/tax
+2025-09-28 12:27:48.451 | INFO     | __main__:store_tax_content:235 - Stored tax content from Groww: No title...
+2025-09-28 12:27:48.452 | SUCCESS  | __main__:crawl_tax_websites:185 - Successfully crawled tax content: Groww
+2025-09-28 12:27:51.458 | INFO     | __main__:crawl_tax_websites:154 - Crawling tax content: https://economictimes.indiatimes.com/wealth/tax
+2025-09-28 12:27:57.328 | INFO     | __main__:store_tax_content:235 - Stored tax content from Economic Times: No title...
+2025-09-28 12:27:57.329 | SUCCESS  | __main__:crawl_tax_websites:185 - Successfully crawled tax content: Economic Times
+2025-09-28 12:28:00.335 | INFO     | __main__:crawl_tax_websites:154 - Crawling tax content: https://www.livemint.com/money/personal-finance/income-tax
+2025-09-28 12:28:05.313 | INFO     | __main__:crawl_tax_websites:187 - Low tax relevance for https://www.livemint.com/money/personal-finance/income-tax, skipping
+2025-09-28 12:28:08.325 | INFO     | __main__:crawl_tax_websites:154 - Crawling tax content: https://www.moneycontrol.com/news/business/personal-finance/tax/
+2025-09-28 12:28:12.819 | INFO     | __main__:crawl_tax_websites:187 - Low tax relevance for https://www.moneycontrol.com/news/business/personal-finance/tax/, skipping
+2025-09-28 12:28:17.059 | INFO     | __main__:process_crawled_tax_data:634 - Added crawled tax content: 
+2025-09-28 12:28:17.375 | INFO     | __main__:process_crawled_tax_data:634 - Added crawled tax content: 
+2025-09-28 12:28:17.677 | INFO     | __main__:process_crawled_tax_data:634 - Added crawled tax content: 
+2025-09-28 12:28:17.985 | INFO     | __main__:process_crawled_tax_data:634 - Added crawled tax content: 
+2025-09-28 12:28:18.289 | INFO     | __main__:process_crawled_tax_data:634 - Added crawled tax content: 
+2025-09-28 12:28:19.474 | INFO     | __main__:process_crawled_tax_data:634 - Added crawled tax content: 
+2025-09-28 12:28:19.478 | SUCCESS  | __main__:populate_tax_knowledge_base:307 - Tax filing knowledge base populated successfully!

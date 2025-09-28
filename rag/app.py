@@ -1,5 +1,5 @@
-# CA Voice RAG Agent - Main Application
-#app.py
+# Tax Filing Voice RAG Agent - Main Application
+# tax_filing_app.py
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -19,7 +19,6 @@ import time
 import google.generativeai as genai
 from groq import Groq
 from typing import Dict, List, Any, Optional
-import yfinance as yf
 import pandas as pd
 from loguru import logger
 import sqlite3
@@ -45,46 +44,50 @@ def before_request():
 # Configuration
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-GROQ_MODEL = "llama-3.1-8b-instant"  # Fast model for quicker responses
+GROQ_MODEL = "llama-3.1-8b-instant"
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
 
-# Initialize AI clients (prefer Groq for speed as primary)
+# Initialize AI clients
 groq_client = None
 gemini_model = None
 
 if GROQ_API_KEY:
     try:
         groq_client = Groq(api_key=GROQ_API_KEY)
-        logger.info("Groq client initialized as primary (faster)")
+        logger.info("Groq client initialized as primary")
     except Exception as e:
         logger.error(f"Failed to initialize Groq: {str(e)}")
-        print("⚠️ Check GROQ_API_KEY on Groq console")
 
 if GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         gemini_model = genai.GenerativeModel(
-            'gemini-1.5-flash-latest',  # Fastest available
+            'gemini-1.5-flash-latest',
             generation_config={
-                'temperature': 0.1,  # Lowered for factual responses
-                'top_p': 0.6,  # Lowered to reduce creativity
-                'max_output_tokens': 200  # Reduced for brevity
+                'temperature': 0.1,
+                'top_p': 0.6,
+                'max_output_tokens': 250
             }
         )
         logger.info("Gemini AI initialized as fallback")
     except Exception as e:
         logger.error(f"Failed to initialize Gemini: {str(e)}")
-        print("⚠️ Check GEMINI_API_KEY and quota in Google Cloud Console")
 
-# Initialize ChromaDB with persistent storage
+# Initialize ChromaDB with tax-focused collections
 try:
-    client = PersistentClient(path="./chroma_financial_db")
+    client = PersistentClient(path="./chroma_tax_filing_db")
     embedding_function = embedding_functions.DefaultEmbeddingFunction()
     
-    # Get collections
+    # Get tax-specific collections
     collections = {}
-    collection_names = ["financial_knowledge", "tax_rules", "investment_advice", "stock_analysis"]
+    collection_names = [
+        "tax_filing_basics", 
+        "income_categories", 
+        "tax_regimes", 
+        "itr_forms", 
+        "deductions_exemptions"
+    ]
     
     for name in collection_names:
         try:
@@ -97,44 +100,75 @@ try:
             logger.warning(f"Collection {name} not found: {str(e)}")
             collections[name] = None
     
-    logger.info("Connected to persistent ChromaDB collections")
+    logger.info("Connected to tax filing ChromaDB collections")
     
 except Exception as e:
     logger.error(f"ChromaDB connection failed: {str(e)}")
-    logger.error("Please run financial_knowledge_setup.py first")
+    logger.error("Please run tax_filing_knowledge_setup.py first")
     collections = {}
 
-# Session storage
+# Session storage for tax filing context
 sessions = {}
 
 def extract_number_from_speech(speech: str) -> Optional[float]:
-    """Extract the first number from speech input using regex."""
+    """Extract the first number from speech input"""
+    # Handle spoken numbers like "ten lakhs", "five crores", etc.
+    speech_lower = speech.lower()
+    
+    # Handle Indian number formats
+    lakh_match = re.search(r'(\d+(?:\.\d+)?)\s*lakh', speech_lower)
+    if lakh_match:
+        return float(lakh_match.group(1)) * 100000
+    
+    crore_match = re.search(r'(\d+(?:\.\d+)?)\s*crore', speech_lower)
+    if crore_match:
+        return float(crore_match.group(1)) * 10000000
+    
+    # Handle regular numbers
     match = re.search(r'\b(\d+(?:\.\d+)?)\b', speech, re.IGNORECASE)
     return float(match.group(1)) if match else None
 
-def extract_income_source_from_speech(speech: str) -> str:
-    """Extract income source from speech (salary or business)."""
+def extract_income_sources_from_speech(speech: str) -> List[str]:
+    """Extract income sources mentioned in speech"""
     speech_lower = speech.lower()
-    if "business" in speech_lower or "self-employed" in speech_lower or "freelance" in speech_lower:
-        return "business"
-    elif "salary" in speech_lower or "job" in speech_lower or "employed" in speech_lower:
-        return "salary"
-    return "unknown"
+    income_sources = []
+    
+    income_keywords = {
+        "salary": ["salary", "job", "employed", "employment", "wage"],
+        "business": ["business", "self-employed", "proprietor", "shop", "trading"],
+        "profession": ["profession", "professional", "doctor", "lawyer", "consultant", "practice"],
+        "house_property": ["rental", "rent", "property", "house property", "real estate"],
+        "capital_gains": ["capital gains", "shares", "stocks", "mutual fund", "property sale"],
+        "other_sources": ["interest", "dividend", "fd", "fixed deposit", "savings"]
+    }
+    
+    for source_type, keywords in income_keywords.items():
+        if any(keyword in speech_lower for keyword in keywords):
+            income_sources.append(source_type)
+    
+    return income_sources if income_sources else ["unknown"]
 
-def extract_tax_regime_from_speech(speech: str) -> str:
-    """Extract tax regime from speech (old or new)."""
-    speech_lower = speech.lower()
-    if "old" in speech_lower:
-        return "old"
-    elif "new" in speech_lower:
-        return "new"
-    return "unknown"
+def extract_age_from_speech(speech: str) -> Optional[int]:
+    """Extract age from speech"""
+    match = re.search(r'\b(\d{1,2})\b', speech)
+    if match:
+        age = int(match.group(1))
+        return age if 18 <= age <= 99 else None
+    return None
 
-class FinancialAdvisor:
+def extract_yes_no_from_speech(speech: str) -> Optional[bool]:
+    """Extract yes/no response from speech"""
+    speech_lower = speech.lower().strip()
+    if any(word in speech_lower for word in ["yes", "yeah", "yep", "sure", "correct", "right"]):
+        return True
+    elif any(word in speech_lower for word in ["no", "nope", "not", "wrong", "incorrect"]):
+        return False
+    return None
+
+class TaxFilingAdvisor:
     def __init__(self):
         self.gemini_requests_count = 0
-        self.max_gemini_requests = 1000  # Daily limit
-        self.db_path = "financial_data.db"
+        self.max_gemini_requests = 1000
         self.rate_limit_reset = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
         
     def reset_daily_limits(self):
@@ -143,115 +177,108 @@ class FinancialAdvisor:
             self.gemini_requests_count = 0
             self.rate_limit_reset = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
             logger.info("Daily API limits reset")
-        
-    def get_user_profile(self, session_data: Dict) -> Dict:
-        """Extract user profile from conversation"""
+    
+    def get_user_tax_profile(self, session_data: Dict) -> Dict:
+        """Extract user tax profile from conversation"""
         profile = {
             "age": session_data.get("age", "unknown"),
-            "income": session_data.get("income", "unknown"),
-            "savings": session_data.get("savings", "unknown"),
-            "income_source": session_data.get("income_source", "unknown"),  # salary or business
-            "risk_tolerance": session_data.get("risk_tolerance", "moderate"),
-            "investment_goal": session_data.get("investment_goal", "general"),
-            "experience_level": session_data.get("experience_level", "beginner"),
-            "location": session_data.get("location", "India"),
-            "tax_regime": session_data.get("tax_regime", "unknown"),
-            "investment_horizon": session_data.get("investment_horizon", "unknown")
+            "total_income": session_data.get("total_income", "unknown"),
+            "income_sources": session_data.get("income_sources", ["unknown"]),
+            "salary_income": session_data.get("salary_income", "unknown"),
+            "business_income": session_data.get("business_income", "unknown"),
+            "house_property": session_data.get("house_property", "unknown"),
+            "capital_gains": session_data.get("capital_gains", "unknown"),
+            "inherited_property": session_data.get("inherited_property", "unknown"),
+            "tax_regime_preference": session_data.get("tax_regime_preference", "unknown"),
+            "previous_itr_filed": session_data.get("previous_itr_filed", "unknown"),
+            "current_deductions": session_data.get("current_deductions", "unknown"),
+            "pan_card": session_data.get("pan_card", "unknown")
         }
         return profile
     
-    def determine_query_category(self, query: str) -> str:
-        """Categorize user query to search appropriate collection"""
+    def determine_tax_query_category(self, query: str) -> str:
+        """Categorize tax-related queries"""
         query_lower = query.lower()
         
-        # Retirement keywords
-        retirement_keywords = [
-            "retirement", "pension", "nps", "ppf", "retire", "post-retirement",
-            "retirement planning", "corpus", "withdrawal"
+        # Tax filing basics
+        basic_keywords = [
+            "how to file", "tax filing", "itr filing", "tax return", "file taxes",
+            "due date", "penalty", "documents required", "verification", "e-filing"
         ]
         
-        # Investment keywords (enhanced)
-        investment_keywords = [
-            "invest", "investment", "mutual fund", "sip", "portfolio", "returns", 
-            "risk", "elss", "ppf", "nps", "fd", "recurring deposit", "bonds",
-            "diversification", "asset allocation", "rebalancing", "investment plan"
+        # Income categories
+        income_keywords = [
+            "salary income", "business income", "house property", "rental income",
+            "capital gains", "other sources", "dividend", "interest income"
         ]
         
-        # Tax-related keywords
-        tax_keywords = [
-            "tax", "80c", "80d", "deduction", "exemption", "itr", "tds", 
-            "advance tax", "refund", "section", "income tax", "capital gains",
-            "ltcg", "stcg", "rebate", "surcharge", "cess", "new regime", "old regime", "tax filing", "tax saving"
+        # Tax regimes
+        regime_keywords = [
+            "old regime", "new regime", "tax regime", "which regime", "regime comparison",
+            "tax rates", "tax slabs"
         ]
         
-        # Stock keywords
-        stock_keywords = [
-            "stock", "share", "market", "nifty", "sensex", "ipo", "dividend",
-            "pe ratio", "eps", "volatility", "sector", "blue chip", "small cap",
-            "mid cap", "large cap", "nse", "bse"
+        # ITR forms
+        form_keywords = [
+            "itr form", "itr-1", "itr-2", "itr-3", "itr-4", "which form",
+            "form selection", "sahaj", "sugam"
         ]
         
-        # Financial literacy keywords
-        financial_literacy_keywords = [
-            "financial literacy", "budgeting", "saving tips", "debt management", "credit score", "inflation", "finance laws"
+        # Deductions and exemptions
+        deduction_keywords = [
+            "deduction", "80c", "80d", "exemption", "hra", "standard deduction",
+            "tax saving", "investment", "ppf", "elss", "home loan"
         ]
         
-        if any(keyword in query_lower for keyword in retirement_keywords):
-            return "retirement_planning"
-        elif any(keyword in query_lower for keyword in investment_keywords):
-            return "investment_advice"
-        elif any(keyword in query_lower for keyword in tax_keywords):
-            return "tax_rules"
-        elif any(keyword in query_lower for keyword in stock_keywords):
-            return "stock_analysis"
-        elif any(keyword in query_lower for keyword in financial_literacy_keywords):
-            return "financial_knowledge"
+        if any(keyword in query_lower for keyword in basic_keywords):
+            return "tax_filing_basics"
+        elif any(keyword in query_lower for keyword in income_keywords):
+            return "income_categories"
+        elif any(keyword in query_lower for keyword in regime_keywords):
+            return "tax_regimes"
+        elif any(keyword in query_lower for keyword in form_keywords):
+            return "itr_forms"
+        elif any(keyword in query_lower for keyword in deduction_keywords):
+            return "deductions_exemptions"
         else:
-            return "financial_knowledge"
+            return "tax_filing_basics"
     
-    def query_chroma(self, query: str, category: str) -> List[Dict]:
-        """Query specific ChromaDB collection with fallback and relevance filter"""
-        collection_map = {
-            "retirement_planning": "financial_knowledge",
-            "investment_advice": "investment_advice",
-            "tax_rules": "tax_rules",
-            "stock_analysis": "stock_analysis",
-            "financial_knowledge": "financial_knowledge"
-        }
-        actual_category = collection_map.get(category, "financial_knowledge")
-        
-        if collections.get(actual_category):
+    def query_tax_collection(self, query: str, category: str) -> List[Dict]:
+        """Query specific tax collection with relevance filtering"""
+        if collections.get(category):
             try:
-                results = collections[actual_category].query(
+                results = collections[category].query(
                     query_texts=[query],
-                    n_results=5,  # Increased for more context
+                    n_results=5,
                     include=["documents", "metadatas", "distances"]
                 )
-                # Filter results with high relevance (distance < 0.5)
+                
+                # Filter highly relevant results
                 filtered_results = [
                     {"content": doc, "metadata": meta}
                     for doc, meta, dist in zip(results["documents"][0], results["metadatas"][0], results["distances"][0])
-                    if dist < 0.5 and meta.get("confidence", 1.0) >= 0.8
+                    if dist < 0.6
                 ]
-                return filtered_results if filtered_results else [{"content": "No highly relevant information found.", "metadata": {}}]
+                
+                return filtered_results if filtered_results else [{"content": "No specific information found for your query.", "metadata": {}}]
             except Exception as e:
-                logger.error(f"Chroma query failed for {actual_category}: {str(e)}")
-                return [{"content": "No relevant information found.", "metadata": {}}]
-        return [{"content": "No relevant information found.", "metadata": {}}]
+                logger.error(f"Tax collection query failed for {category}: {str(e)}")
+                return [{"content": "Unable to retrieve tax information at the moment.", "metadata": {}}]
+        return [{"content": "Tax information not available.", "metadata": {}}]
     
     async def get_ai_response(self, prompt: str) -> Optional[str]:
-        """Get AI response with Groq as primary (faster) and Gemini fallback"""
+        """Get AI response for tax queries"""
         self.reset_daily_limits()
         
-        # Primary: Groq (faster inference)
+        # Primary: Groq
         if groq_client:
             try:
                 response = groq_client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt}],
                     model=GROQ_MODEL,
-                    temperature=0.1,  # Lowered for factual responses
-                    max_tokens=200,  # Reduced for brevity
-                    top_p=0.6  # Lowered to reduce creativity
+                    temperature=0.1,
+                    max_tokens=250,
+                    top_p=0.6
                 )
                 return response.choices[0].message.content.strip()
             except Exception as e:
@@ -261,82 +288,108 @@ class FinancialAdvisor:
         if gemini_model and self.gemini_requests_count < self.max_gemini_requests:
             try:
                 self.gemini_requests_count += 1
-                response = await gemini_model.generate_content_async(
-                    prompt,
-                    generation_config={
-                        'temperature': 0.1,
-                        'top_p': 0.6,
-                        'max_output_tokens': 200
-                    }
-                )
+                response = await gemini_model.generate_content_async(prompt)
                 return response.text.strip()
             except Exception as e:
                 logger.error(f"Gemini failed: {str(e)}")
         
-        # Ultimate fallback: Rule-based response
-        return self.get_rule_based_response(prompt)
+        # Ultimate fallback
+        return self.get_tax_rule_based_response(prompt)
     
-    def get_rule_based_response(self, query: str) -> str:
-        """Sophisticated rule-based fallback for when AI services are unavailable"""
+    def get_tax_rule_based_response(self, query: str) -> str:
+        """Tax-specific rule-based fallback responses"""
         query_lower = query.lower()
         
-        if "retirement" in query_lower:
-            return "For retirement planning, consider a mix of NPS and PPF for tax benefits and stable returns. A corpus of 25-30x your annual expenses is ideal. What’s your target retirement age?"
-        elif "investment" in query_lower or "sip" in query_lower:
-            return "For investments, start with diversified equity mutual funds via SIPs for long-term growth. ELSS funds offer tax benefits under Section 80C. What’s your investment horizon?"
-        elif "tax" in query_lower:
-            return "You can save up to ₹1.5 lakh under Section 80C via ELSS, PPF, or NSC. The new tax regime may suit high earners. Which regime are you using?"
-        elif "stock" in query_lower:
-            return "Diversify across large-cap and mid-cap stocks to balance risk. Monitor NIFTY 50 trends and P/E ratios. Which sector interests you?"
-        elif "financial literacy" in query_lower or "budgeting" in query_lower:
-            return "Financial literacy basics: Track expenses, save 20% of income, build emergency fund. Avoid debt traps. What's your specific question?"
+        if "file tax" in query_lower or "itr" in query_lower:
+            return "For tax filing, you need Form 16, bank statements, and investment proofs. ITR-1 is for salary income up to ₹50 lakh. Due date is July 31st for individuals. What's your income source?"
+        elif "regime" in query_lower:
+            return "New tax regime has lower rates but fewer deductions. Old regime allows 80C, HRA, home loan benefits. Choose based on your total deductions. What deductions do you currently have?"
+        elif "deduction" in query_lower or "80c" in query_lower:
+            return "Section 80C allows ₹1.5 lakh deduction via ELSS, PPF, life insurance, home loan principal. Section 80D for health insurance up to ₹25,000. What investments do you have?"
+        elif "penalty" in query_lower:
+            return "Late filing penalty is ₹1,000-10,000 based on income. Interest charged at 1% per month on unpaid taxes. File before July 31st to avoid penalty."
         else:
-            return "Could you clarify your financial query? For example, ask about taxes, investments, or retirement planning."
+            return "I can help with tax filing, ITR forms, regime selection, and deductions. Please specify your tax-related question."
     
-    async def generate_response(self, query: str, session_id: str) -> tuple[str, Optional[str]]:
-        """Generate financial advice with RAG and AI. Returns (response, follow_up_question)"""
+    def suggest_itr_form(self, profile: Dict) -> str:
+        """Suggest appropriate ITR form based on user profile"""
+        income_sources = profile.get("income_sources", [])
+        total_income = profile.get("total_income", "unknown")
+        
+        # Try to get numeric income
+        try:
+            income_amount = float(total_income) if total_income != "unknown" else 0
+        except:
+            income_amount = 0
+        
+        # ITR-1 eligibility
+        if (len(income_sources) == 1 and 
+            "salary" in income_sources and 
+            income_amount <= 5000000 and  # 50 lakh
+            profile.get("house_property", "no") == "one" and
+            profile.get("capital_gains", "no") == "no"):
+            return "ITR-1 (Sahaj) - suitable for your salary income"
+        
+        # ITR-4 for presumptive business
+        if "business" in income_sources and income_amount <= 20000000:  # 2 crore
+            return "ITR-4 (Sugam) - for presumptive business income"
+        
+        # ITR-3 for business/profession
+        if "business" in income_sources or "profession" in income_sources:
+            return "ITR-3 - required for business/professional income"
+        
+        # ITR-2 for complex cases
+        if (len(income_sources) > 1 or 
+            "capital_gains" in income_sources or 
+            profile.get("inherited_property", "no") == "yes"):
+            return "ITR-2 - for multiple income sources or capital gains"
+        
+        return "ITR-2 - recommended for your income profile"
+    
+    async def generate_tax_response(self, query: str, session_id: str) -> tuple[str, Optional[str]]:
+        """Generate tax filing advice with context"""
         session = sessions.get(session_id, {})
-        category = self.determine_query_category(query)
-        rag_results = self.query_chroma(query, category)
+        category = self.determine_tax_query_category(query)
+        rag_results = self.query_tax_collection(query, category)
         
-        context = "\n".join([result["content"] for result in rag_results]) if rag_results else "No relevant information found."
+        context = "\n".join([result["content"] for result in rag_results]) if rag_results else "No specific information found."
+        profile = self.get_user_tax_profile(session)
         
-        profile = self.get_user_profile(session)
-        
-        # Enhanced prompt with stricter instructions
+        # Create tax-focused prompt
         prompt = f"""
-        You are a professional Indian Chartered Accountant. Provide accurate, concise financial advice based strictly on Indian laws and the provided context. Do not speculate or provide unverified information. If information is missing, state so and ask for clarification. Keep responses under 75 words unless details are requested, using clear, professional financial terms. End with a relevant follow-up question if needed.
+        You are an expert Indian Tax Consultant specializing in income tax filing. Provide accurate, practical advice based on Indian tax laws and the context provided. Keep responses under 80 words for voice delivery, using clear, professional language.
+
+        User Tax Profile: Age {profile['age']}, Total Income ₹{profile['total_income']}, 
+        Income Sources: {', '.join(profile['income_sources'])}, 
+        Tax Regime: {profile['tax_regime_preference']}, 
+        Previous ITR Filed: {profile['previous_itr_filed']}
+
+        Tax Knowledge Context: {context}
         
-        User Profile: Age {profile['age']}, Annual Income ₹{profile['income']}, Savings ₹{profile['savings']}, Income Source: {profile['income_source']},
-        Risk Tolerance: {profile['risk_tolerance']}, Investment Horizon: {profile['investment_horizon']}, Goal: {profile['investment_goal']}.
-        
-        Context from Knowledge Base: {context}
         Current Query: {query}
         
-        Respond in a professional, engaging tone suitable for voice conversation.
+        Provide specific, actionable tax advice in a conversational tone suitable for voice.
         """
         
         response = await self.get_ai_response(prompt)
         
-        # Validate response for key facts (e.g., tax limits)
-        if "80C" in query.lower() and "1.5 lakh" not in response and "150000" not in response:
-            response += " Note: Section 80C allows deductions up to ₹1.5 lakh."
-        
-        # Detect follow-ups based on category
+        # Determine appropriate follow-up questions
         follow_up = None
         follow_up_type = None
-        if category == "investment_advice" and profile['investment_horizon'] == "unknown" and ("sip" in query_lower or "investment" in query_lower):
-            follow_up = "What’s your investment horizon in years?"
-            follow_up_type = "investment_horizon"
-        elif category == "tax_rules" and profile['tax_regime'] == "unknown":
-            follow_up = "Are you using the old or new tax regime?"
-            follow_up_type = "tax_regime"
-        elif category == "tax_rules" and profile['income_source'] == "unknown" and "filing" in query_lower:
-            follow_up = "Is your income from salary or business?"
-            follow_up_type = "income_source"
-        elif category == "tax_rules" and profile['income'] == "unknown" and "filing" in query_lower:
-            follow_up = "What is your approximate annual income in rupees, like 'ten lakhs'?"
-            follow_up_type = "income"
+        
+        if "file tax" in query.lower() or "itr" in query.lower():
+            if profile['total_income'] == "unknown":
+                follow_up = "What's your approximate annual income? You can say like 'five lakhs' or 'ten lakhs'."
+                follow_up_type = "total_income"
+            elif profile['income_sources'] == ["unknown"]:
+                follow_up = "What are your sources of income? Salary, business, rental, or others?"
+                follow_up_type = "income_sources"
+            elif profile['previous_itr_filed'] == "unknown":
+                follow_up = "Have you filed ITR in previous years?"
+                follow_up_type = "previous_itr_filed"
+        elif "regime" in query.lower() and profile['current_deductions'] == "unknown":
+            follow_up = "Do you have investments like PPF, ELSS, or home loan for deductions?"
+            follow_up_type = "current_deductions"
         
         # Update session
         session["last_query"] = query
@@ -348,23 +401,27 @@ class FinancialAdvisor:
         
         return response, follow_up
 
-advisor = FinancialAdvisor()
+advisor = TaxFilingAdvisor()
 
 @app.route("/voice", methods=["POST"])
 def voice():
-    """Handle incoming voice calls with general greeting"""
+    """Handle incoming voice calls for tax filing assistance"""
     session_id = request.form.get("CallSid")
-    sessions[session_id] = {}  # Start with no state, general conversation
+    sessions[session_id] = {}
     
     response = VoiceResponse()
-    response.say("Hi, I'm Creda. How can I assist you with your finances today? You can ask about taxes, investments, mutual funds, or financial laws.", voice="Polly.Aditi", language="en-IN")
-    gather = Gather(input="speech", action="/process_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
+    response.say(
+        "Hello, I'm your Tax Filing Assistant for India. I can help you with ITR filing, tax regime selection, deductions, and income tax queries. How can I assist you with your tax filing today?", 
+        voice="Polly.Aditi", 
+        language="en-IN"
+    )
+    gather = Gather(input="speech", action="/process_tax_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
     response.append(gather)
     return Response(str(response), mimetype="text/xml")
 
-@app.route("/process_speech", methods=["POST"])
-def process_speech():
-    """Process user speech and respond"""
+@app.route("/process_tax_speech", methods=["POST"])
+def process_tax_speech():
+    """Process user speech for tax queries"""
     speech = request.form.get("SpeechResult", "").strip()
     session_id = request.form.get("CallSid")
     session = sessions.get(session_id, {})
@@ -372,237 +429,304 @@ def process_speech():
     response = VoiceResponse()
     
     if not speech:
-        response.say("I didn't catch that. Please try again.", voice="Polly.Aditi", language="en-IN")
-        gather = Gather(input="speech", action="/process_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
+        response.say("I didn't catch that. Please try again with your tax question.", voice="Polly.Aditi", language="en-IN")
+        gather = Gather(input="speech", action="/process_tax_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
         response.append(gather)
         return Response(str(response), mimetype="text/xml")
     
-    if "goodbye" in speech.lower() or "end call" in speech.lower() or "thank you" in speech.lower():
-        response.say("Thank you for calling. Have a great day! Goodbye.", voice="Polly.Aditi", language="en-IN")
+    if any(word in speech.lower() for word in ["goodbye", "end call", "thank you", "bye"]):
+        response.say("Thank you for using our tax filing service. For complex cases, consult a qualified CA. Goodbye!", voice="Polly.Aditi", language="en-IN")
         response.hangup()
         return Response(str(response), mimetype="text/xml")
     
-    # Check for pending follow-up
+    # Handle pending follow-ups
     pending_follow_up = session.get("pending_follow_up")
     pending_follow_up_type = session.get("pending_follow_up_type")
-    if pending_follow_up:
-        # Process based on follow-up type
-        if pending_follow_up_type == "investment_horizon":
-            horizon_num = extract_number_from_speech(speech)
-            if horizon_num and horizon_num > 0:
-                session["investment_horizon"] = str(int(horizon_num))
-                del session["pending_follow_up"]
-                del session["pending_follow_up_type"]
-                sessions[session_id] = session
-                response.say(f"Noted, {int(horizon_num)}-year investment horizon. Let me refine that advice for you.", voice="Polly.Aditi", language="en-IN")
-                # Regenerate response with updated profile
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                ai_response, new_follow_up = loop.run_until_complete(advisor.generate_response(session["last_query"], session_id))
-                response.say(ai_response, voice="Polly.Aditi", language="en-IN")
-            else:
-                response.say("Please say a number of years, like 'ten' or 'twenty five'.", voice="Polly.Aditi", language="en-IN")
-                gather = Gather(input="speech", action="/process_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
-                response.append(gather)
-                sessions[session_id] = session
-                return Response(str(response), mimetype="text/xml")
-        elif pending_follow_up_type == "income_source":
-            income_source = extract_income_source_from_speech(speech)
-            if income_source != "unknown":
-                session["income_source"] = income_source
-                del session["pending_follow_up"]
-                del session["pending_follow_up_type"]
-                sessions[session_id] = session
-                response.say(f"Noted, income from {income_source}. Let me refine that advice for you.", voice="Polly.Aditi", language="en-IN")
-                # Regenerate response
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                ai_response, new_follow_up = loop.run_until_complete(advisor.generate_response(session["last_query"], session_id))
-                response.say(ai_response, voice="Polly.Aditi", language="en-IN")
-            else:
-                response.say("Please say 'salary' or 'business'.", voice="Polly.Aditi", language="en-IN")
-                gather = Gather(input="speech", action="/process_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
-                response.append(gather)
-                sessions[session_id] = session
-                return Response(str(response), mimetype="text/xml")
-        elif pending_follow_up_type == "tax_regime":
-            tax_regime = extract_tax_regime_from_speech(speech)
-            if tax_regime != "unknown":
-                session["tax_regime"] = tax_regime
-                del session["pending_follow_up"]
-                del session["pending_follow_up_type"]
-                sessions[session_id] = session
-                response.say(f"Noted, {tax_regime} tax regime. Let me refine that advice for you.", voice="Polly.Aditi", language="en-IN")
-                # Regenerate response
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                ai_response, new_follow_up = loop.run_until_complete(advisor.generate_response(session["last_query"], session_id))
-                response.say(ai_response, voice="Polly.Aditi", language="en-IN")
-            else:
-                response.say("Please say 'old' or 'new' regime.", voice="Polly.Aditi", language="en-IN")
-                gather = Gather(input="speech", action="/process_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
-                response.append(gather)
-                sessions[session_id] = session
-                return Response(str(response), mimetype="text/xml")
-        elif pending_follow_up_type == "income":
-            income_num = extract_number_from_speech(speech)
-            if income_num and income_num > 0:
-                session["income"] = str(int(income_num * 100000))  # Assume lakhs
-                del session["pending_follow_up"]
-                del session["pending_follow_up_type"]
-                sessions[session_id] = session
-                response.say(f"Noted, annual income ₹{int(income_num * 100000):,}. Let me refine that advice for you.", voice="Polly.Aditi", language="en-IN")
-                # Regenerate response
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                ai_response, new_follow_up = loop.run_until_complete(advisor.generate_response(session["last_query"], session_id))
-                response.say(ai_response, voice="Polly.Aditi", language="en-IN")
-            else:
-                response.say("Please say your annual income, like 'ten lakhs'.", voice="Polly.Aditi", language="en-IN")
-                gather = Gather(input="speech", action="/process_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
-                response.append(gather)
-                sessions[session_id] = session
-                return Response(str(response), mimetype="text/xml")
-        
-        if new_follow_up:
-            session["pending_follow_up"] = new_follow_up
-            # Set pending_follow_up_type based on new_follow_up
-            if "horizon" in new_follow_up.lower():
-                session["pending_follow_up_type"] = "investment_horizon"
-            elif "income from" in new_follow_up.lower():
-                session["pending_follow_up_type"] = "income_source"
-            elif "regime" in new_follow_up.lower():
-                session["pending_follow_up_type"] = "tax_regime"
-            elif "income" in new_follow_up.lower():
-                session["pending_follow_up_type"] = "income"
-            gather = Gather(input="speech", action="/process_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
-            gather.say(new_follow_up, voice="Polly.Aditi", language="en-IN")
-            response.append(gather)
-        else:
-            gather = Gather(input="speech", action="/process_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
-            response.append(gather)
-        
-        sessions[session_id] = session
-        return Response(str(response), mimetype="text/xml")
     
-    # Generate normal response
+    if pending_follow_up:
+        if pending_follow_up_type == "total_income":
+            income_amount = extract_number_from_speech(speech)
+            if income_amount and income_amount > 0:
+                session["total_income"] = str(int(income_amount))
+                del session["pending_follow_up"]
+                del session["pending_follow_up_type"]
+                sessions[session_id] = session
+                
+                itr_suggestion = advisor.suggest_itr_form(advisor.get_user_tax_profile(session))
+                response.say(f"Noted, income ₹{int(income_amount):,}. Based on this, you should use {itr_suggestion}.", voice="Polly.Aditi", language="en-IN")
+                
+                # Ask for income sources next
+                session["pending_follow_up"] = "What are your income sources? Salary, business, property rental, or others?"
+                session["pending_follow_up_type"] = "income_sources"
+                gather = Gather(input="speech", action="/process_tax_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
+                gather.say(session["pending_follow_up"], voice="Polly.Aditi", language="en-IN")
+                response.append(gather)
+                sessions[session_id] = session
+                return Response(str(response), mimetype="text/xml")
+            else:
+                response.say("Please specify your income amount, like 'five lakhs' or 'ten lakhs'.", voice="Polly.Aditi", language="en-IN")
+                gather = Gather(input="speech", action="/process_tax_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
+                response.append(gather)
+                sessions[session_id] = session
+                return Response(str(response), mimetype="text/xml")
+        
+        elif pending_follow_up_type == "income_sources":
+            income_sources = extract_income_sources_from_speech(speech)
+            if income_sources != ["unknown"]:
+                session["income_sources"] = income_sources
+                del session["pending_follow_up"]
+                del session["pending_follow_up_type"]
+                sessions[session_id] = session
+                
+                sources_text = ", ".join(income_sources)
+                response.say(f"Understood, your income sources are {sources_text}.", voice="Polly.Aditi", language="en-IN")
+                
+                # Suggest ITR form based on updated profile
+                itr_suggestion = advisor.suggest_itr_form(advisor.get_user_tax_profile(session))
+                response.say(f"For your profile, I recommend {itr_suggestion}. Need help with anything specific?", voice="Polly.Aditi", language="en-IN")
+                
+                gather = Gather(input="speech", action="/process_tax_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
+                response.append(gather)
+                sessions[session_id] = session
+                return Response(str(response), mimetype="text/xml")
+            else:
+                response.say("Please mention your income sources like salary, business, rental property, or others.", voice="Polly.Aditi", language="en-IN")
+                gather = Gather(input="speech", action="/process_tax_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
+                response.append(gather)
+                sessions[session_id] = session
+                return Response(str(response), mimetype="text/xml")
+        
+        elif pending_follow_up_type == "previous_itr_filed":
+            itr_response = extract_yes_no_from_speech(speech)
+            if itr_response is not None:
+                session["previous_itr_filed"] = "yes" if itr_response else "no"
+                del session["pending_follow_up"]
+                del session["pending_follow_up_type"]
+                sessions[session_id] = session
+                
+                if itr_response:
+                    response.say("Good, since you've filed before, the process will be familiar.", voice="Polly.Aditi", language="en-IN")
+                else:
+                    response.say("No problem, I'll guide you through first-time filing.", voice="Polly.Aditi", language="en-IN")
+                
+                # Continue with tax advice
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                ai_response, new_follow_up = loop.run_until_complete(
+                    advisor.generate_tax_response("help with tax filing process", session_id)
+                )
+                response.say(ai_response, voice="Polly.Aditi", language="en-IN")
+                
+                if new_follow_up:
+                    session["pending_follow_up"] = new_follow_up
+                    gather = Gather(input="speech", action="/process_tax_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
+                    gather.say(new_follow_up, voice="Polly.Aditi", language="en-IN")
+                    response.append(gather)
+                else:
+                    gather = Gather(input="speech", action="/process_tax_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
+                    response.append(gather)
+                
+                sessions[session_id] = session
+                return Response(str(response), mimetype="text/xml")
+            else:
+                response.say("Please say yes or no - have you filed ITR before?", voice="Polly.Aditi", language="en-IN")
+                gather = Gather(input="speech", action="/process_tax_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
+                response.append(gather)
+                sessions[session_id] = session
+                return Response(str(response), mimetype="text/xml")
+        
+        elif pending_follow_up_type == "current_deductions":
+            has_deductions = extract_yes_no_from_speech(speech)
+            if has_deductions is not None:
+                session["current_deductions"] = "yes" if has_deductions else "no"
+                del session["pending_follow_up"]
+                del session["pending_follow_up_type"]
+                sessions[session_id] = session
+                
+                if has_deductions:
+                    response.say("With your deductions, old tax regime might be beneficial. Let me calculate.", voice="Polly.Aditi", language="en-IN")
+                else:
+                    response.say("Without major deductions, new tax regime with lower rates may suit you better.", voice="Polly.Aditi", language="en-IN")
+                
+                gather = Gather(input="speech", action="/process_tax_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
+                response.append(gather)
+                sessions[session_id] = session
+                return Response(str(response), mimetype="text/xml")
+            else:
+                response.say("Please say yes or no - do you have investments like PPF, ELSS, or home loan?", voice="Polly.Aditi", language="en-IN")
+                gather = Gather(input="speech", action="/process_tax_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
+                response.append(gather)
+                sessions[session_id] = session
+                return Response(str(response), mimetype="text/xml")
+    
+    # Generate normal tax response
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    ai_response, follow_up = loop.run_until_complete(advisor.generate_response(speech, session_id))
+    ai_response, follow_up = loop.run_until_complete(advisor.generate_tax_response(speech, session_id))
     
     response.say(ai_response, voice="Polly.Aditi", language="en-IN")
     
     if follow_up:
         session["pending_follow_up"] = follow_up
-        if "horizon" in follow_up.lower():
-            session["pending_follow_up_type"] = "investment_horizon"
-        elif "income from" in follow_up.lower():
-            session["pending_follow_up_type"] = "income_source"
-        elif "regime" in follow_up.lower():
-            session["pending_follow_up_type"] = "tax_regime"
-        elif "income" in follow_up.lower():
-            session["pending_follow_up_type"] = "income"
-        gather = Gather(input="speech", action="/process_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
+        if "income" in follow_up.lower() and "annual" in follow_up.lower():
+            session["pending_follow_up_type"] = "total_income"
+        elif "sources" in follow_up.lower():
+            session["pending_follow_up_type"] = "income_sources"
+        elif "filed" in follow_up.lower():
+            session["pending_follow_up_type"] = "previous_itr_filed"
+        elif "deductions" in follow_up.lower() or "investments" in follow_up.lower():
+            session["pending_follow_up_type"] = "current_deductions"
+        
+        gather = Gather(input="speech", action="/process_tax_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
         gather.say(follow_up, voice="Polly.Aditi", language="en-IN")
         response.append(gather)
     else:
-        gather = Gather(input="speech", action="/process_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
+        gather = Gather(input="speech", action="/process_tax_speech", method="POST", speech_timeout="auto", language="en-IN", timeout=60)
         response.append(gather)
     
     sessions[session_id] = session
-    
     return Response(str(response), mimetype="text/xml")
 
 @app.route("/test", methods=["GET"])
 def test_interface():
     return """
     <html>
-        <head><title>CA Voice RAG Agent Test</title></head>
-        <body>
-            <h1>CA Voice RAG Agent Test Interface</h1>
-            <p>System is running. Use Twilio to test voice calls.</p>
+        <head><title>Indian Tax Filing Voice Assistant</title></head>
+        <body style="font-family: Arial, sans-serif; margin: 40px;">
+            <h1>Indian Tax Filing Voice Assistant</h1>
+            <p><strong>Specialized in Indian Income Tax Filing</strong></p>
+            <h3>Services Available:</h3>
+            <ul>
+                <li>ITR form selection (ITR-1 to ITR-4)</li>
+                <li>Tax regime comparison (Old vs New)</li>
+                <li>Income categorization and computation</li>
+                <li>Deductions optimization (80C, 80D, HRA)</li>
+                <li>Filing procedures and requirements</li>
+                <li>Penalty and due date information</li>
+            </ul>
+            <p><em>Call via Twilio to test voice interactions</em></p>
+            <p><a href="/health">Check System Health</a></p>
         </body>
     </html>
     """
 
 @app.route("/health", methods=["GET"])
 def health_check():
-    status = "healthy" if (groq_client or gemini_model) else "degraded"
-    return jsonify({"status": status, "timestamp": datetime.now().isoformat()})
+    """Health check for tax filing system"""
+    ai_status = "available" if (groq_client or gemini_model) else "unavailable"
+    
+    collection_status = {}
+    total_docs = 0
+    for name, collection in collections.items():
+        if collection:
+            try:
+                count = collection.count()
+                collection_status[name] = count
+                total_docs += count
+            except:
+                collection_status[name] = "error"
+        else:
+            collection_status[name] = "not_found"
+    
+    status = "healthy" if ai_status == "available" and total_docs > 0 else "degraded"
+    
+    return jsonify({
+        "status": status,
+        "ai_services": ai_status,
+        "tax_collections": collection_status,
+        "total_documents": total_docs,
+        "timestamp": datetime.now().isoformat(),
+        "specialization": "Indian Tax Filing"
+    })
 
-# Add error handler for uncaught exceptions
 @app.errorhandler(Exception)
 def handle_exception(e):
     """Global exception handler"""
     logger.error(f"Unhandled exception: {str(e)}")
     
-    # For Twilio webhooks, always return valid TwiML
-    if request.endpoint in ['voice', 'process_speech']:
+    if request.endpoint in ['voice', 'process_tax_speech']:
         response = VoiceResponse()
-        response.say("Technical issue. Please call back.", voice="Polly.Aditi", language="en-IN")
+        response.say("Technical issue occurred. Please try again or call back later.", voice="Polly.Aditi", language="en-IN")
         return Response(str(response), mimetype="text/xml")
     
-    # For API endpoints
     return jsonify({
         "error": "Internal server error",
         "message": "Please try again or contact support"
     }), 500
 
-def verify_system_health():
-    """Verify system components with fallbacks"""
+def verify_tax_system_health():
+    """Verify tax filing system components"""
     issues = []
     
-    # Check ChromaDB
-    try:
-        if not collections.get("financial_knowledge"):
-            issues.append("Knowledge base not found - will use static responses")
-    except Exception as e:
-        issues.append(f"ChromaDB error: {e}")
+    # Check tax collections
+    tax_collections_available = 0
+    for name, collection in collections.items():
+        try:
+            if collection and collection.count() > 0:
+                tax_collections_available += 1
+        except:
+            issues.append(f"Tax collection {name} has issues")
+    
+    if tax_collections_available == 0:
+        issues.append("No tax knowledge base found - run tax_filing_knowledge_setup.py")
     
     # Check AI services
-    ai_available = bool(groq_client or gemini_model)
-    if not ai_available:
-        issues.append("No AI services available - will use rule-based responses")
+    if not (groq_client or gemini_model):
+        issues.append("No AI services available - configure GROQ_API_KEY or GEMINI_API_KEY")
     
-    # Check Twilio config
+    # Check Twilio
     if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN):
         issues.append("Twilio not configured - voice calls won't work")
     
     if issues:
-        print("⚠️  System Issues Found:")
+        print("Warning - System Issues Found:")
         for issue in issues:
             print(f"   - {issue}")
-        print("\n✅ System will continue with available fallbacks")
+        print("\nSystem will run with available components and fallbacks")
     else:
-        print("✅ All systems operational")
+        print("All tax filing system components operational")
     
     return len(issues) == 0
 
 if __name__ == "__main__":
-    # System health check
-    print("🏛️  CA Voice RAG Agent Starting...")
-    print("=" * 50)
+    print("Indian Tax Filing Voice RAG Agent Starting...")
+    print("=" * 55)
     
-    all_systems_ok = verify_system_health()
+    system_ok = verify_tax_system_health()
     
-    if not all_systems_ok:
-        print("\n⚠️  Running in degraded mode with fallbacks")
-        print("Some features may be limited but voice calls will work")
+    print("\nTax Filing Services:")
+    print(f"Voice Interface: {'Yes' if TWILIO_ACCOUNT_SID else 'No - configure Twilio'}")
+    print(f"AI Services: {'Yes' if (groq_client or gemini_model) else 'No - configure APIs'}")
     
-    print("\nServices Available:")
-    print(f"✓ Voice Interface (Twilio): {'Yes' if TWILIO_ACCOUNT_SID else 'No'}")
-    print(f"✓ AI Services: {'Yes' if (groq_client or gemini_model) else 'Rule-based only'}")
-    print(f"✓ Knowledge Base: {'Yes' if collections.get('financial_knowledge') else 'Static only'}")
-    print(f"✓ Fallback Responses: Always available")
+    # Show tax collections status
+    print(f"Tax Knowledge Collections:")
+    for name, collection in collections.items():
+        try:
+            count = collection.count() if collection else 0
+            status = f"{count} docs" if count > 0 else "Empty/Missing"
+            print(f"   {name}: {status}")
+        except:
+            print(f"   {name}: Error")
     
-    print("=" * 50)
-    print(f"🌐 Test Interface: http://localhost:5000/test")
-    print(f"📊 Health Check: http://localhost:5000/health") 
-    print(f"☎️  Twilio Webhook: Use HTTPS ngrok URL + /voice")
-    print("=" * 50)
+    print("\nSpecialized Tax Areas Covered:")
+    print("- ITR form selection and filing procedures")
+    print("- Old vs New tax regime comparison")
+    print("- Income categorization (Salary, Business, Property)")
+    print("- Tax deductions and exemptions (80C, 80D, HRA)")
+    print("- Penalty calculations and due dates")
+    print("- E-filing and verification process")
+    
+    print("=" * 55)
+    print(f"Test Interface: http://localhost:5000/test")
+    print(f"Health Check: http://localhost:5000/health") 
+    print(f"Twilio Webhook: Use HTTPS ngrok URL + /voice")
+    print("=" * 55)
+    
+    if not system_ok:
+        print("Running with limited functionality - some components need setup")
     
     try:
         app.run(debug=False, port=5000, host='0.0.0.0', threaded=True)
     except Exception as e:
-        print(f"❌ Failed to start server: {e}")
-        print("Check if port 5000 is available or try a different port")
+        print(f"Failed to start server: {e}")
+        print("Check if port 5000 is available")
