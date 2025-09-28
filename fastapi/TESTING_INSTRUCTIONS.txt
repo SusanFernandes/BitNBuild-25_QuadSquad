@@ -1,0 +1,44 @@
+
+FINANCIAL API TESTING INSTRUCTIONS
+==================================
+
+1. Start the API server:
+   python financial_ai_server.py
+
+2. The server should run on http://localhost:8000
+
+3. Manual testing files created:
+   - sample_bank_statement.csv (for /upload/statements)
+
+4. Test endpoints using curl or Postman:
+
+   Health Check:
+   GET http://localhost:8000/health
+
+   Upload Bank Statement:
+   POST http://localhost:8000/upload/statements
+   (Upload sample_bank_statement.csv as 'files')
+
+   Tax Analysis:
+   POST http://localhost:8000/analyze/tax
+   Form data: annual_income=1200000, current_investments={"80C": 50000}
+
+   Chat Query:
+   POST http://localhost:8000/chat/query
+   JSON: {"question": "How much tax can I save with ELSS investment?"}
+
+5. Run this test suite:
+   python test_financial_api.py
+
+Expected Results:
+- Health check should return status 200
+- Statement upload should categorize transactions correctly
+- Tax analysis should calculate both regimes
+- Chat should provide relevant financial advice
+- CIBIL analysis should parse credit reports
+
+Troubleshooting:
+- Ensure all dependencies are installed
+- Check if GROQ_API_KEY environment variable is set
+- Verify that ports 8000 is available
+- Check server logs for detailed error messages

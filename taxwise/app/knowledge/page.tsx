@@ -1,124 +1,44 @@
 import { BrandThemeWrapper } from "@/components/brand-theme-wrapper"
 import { SiteHeader } from "@/components/site-header"
 import KnowledgeUpdater from "@/components/knowledge-updater"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { AccentIconRow, OutlineCard } from "@/components/pastel-accents"
 import Link from "next/link"
 
 export default function Page() {
   return (
     <BrandThemeWrapper>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-8 grid gap-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Knowledge</h1>
-          <Button asChild variant="outline">
-            <Link href="/health">Check API Health</Link>
-          </Button>
-        </div>
-        <KnowledgeUpdater />
+      <main className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-12 grid gap-10">
+        <section className="grid md:grid-cols-2 gap-8 items-center animate-fade-in">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-extrabold">Knowledge base and document indexing</h1>
+            <p className="text-lg text-muted-foreground mt-2">Upload policies, spreadsheets, and SOPs to enable focused Q&A and searchable references.</p>
 
-        {/* What to upload */}
-        <section aria-labelledby="knowledge-types" className="border-t border-border bg-muted/30">
-          <div className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-12 grid gap-6">
-            <h2 id="knowledge-types" className="text-pretty text-xl md:text-2xl font-semibold">
-              Knowledge types
-            </h2>
-            <div className="grid gap-4 md:grid-cols-3">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Policies</CardTitle>
-                  <CardDescription>Company or tax</CardDescription>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground">
-                  Upload PDFs for quick Q&A summaries.
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Spreadsheets</CardTitle>
-                  <CardDescription>Reference tables</CardDescription>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground">
-                  Rates, slabs, and limits for fast lookup.
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Docs & notes</CardTitle>
-                  <CardDescription>Internal SOPs</CardDescription>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground">
-                  Turn scattered notes into indexed answers.
-                </CardContent>
-              </Card>
+            <div className="mt-4">
+              <Button asChild className="bg-gradient-to-r from-indigo-600 to-pink-500 text-white">
+                <Link href="/health">Check API health</Link>
+              </Button>
             </div>
           </div>
-        </section>
 
-        {/* Pastel callouts */}
-        <section
-          aria-labelledby="knowledge-accents"
-          className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-12"
-        >
-          <h2 id="knowledge-accents" className="text-pretty text-xl md:text-2xl font-semibold mb-4">
-            Pastel callouts
-          </h2>
-          <AccentIconRow />
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <OutlineCard accent="pink">
-              <div className="text-sm text-muted-foreground">Upload tax circulars for quick policy Q&A.</div>
-            </OutlineCard>
-            <OutlineCard accent="green">
-              <div className="text-sm text-muted-foreground">Index spreadsheets to enable slab lookups.</div>
-            </OutlineCard>
-            <OutlineCard accent="pink">
-              <div className="text-sm text-muted-foreground">Keep SOPs updated to avoid outdated answers.</div>
-            </OutlineCard>
+          <div className="p-6 rounded-2xl bg-card shadow animate-fade-in">
+            <KnowledgeUpdater />
           </div>
         </section>
 
-        {/* Indexing approach */}
-        <section aria-labelledby="indexing" className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-12">
-          <h2 id="indexing" className="text-pretty text-xl md:text-2xl font-semibold mb-4">
-            How indexing works
-          </h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardContent className="pt-6 text-sm text-muted-foreground">
-                Documents are chunked, embedded, and stored with metadata for targeted retrieval.
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6 text-sm text-muted-foreground">
-                Freshness policies ensure recent uploads are prioritized in answers.
-              </CardContent>
-            </Card>
+        <section className="grid gap-6 md:grid-cols-3">
+          <div className="p-6 rounded-2xl bg-card shadow">
+            <div className="font-medium">Policies</div>
+            <p className="text-sm text-muted-foreground mt-2">Upload tax circulars and policy PDFs for quick Q&A.</p>
           </div>
-        </section>
-
-        {/* FAQ */}
-        <section aria-labelledby="knowledge-faq" className="border-t border-border bg-muted/30">
-          <div className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-12">
-            <h2 id="knowledge-faq" className="text-pretty text-xl md:text-2xl font-semibold mb-4">
-              Knowledge FAQ
-            </h2>
-            <Accordion type="single" collapsible>
-              <AccordionItem value="limits">
-                <AccordionTrigger>Are there limits?</AccordionTrigger>
-                <AccordionContent className="text-sm text-muted-foreground">
-                  Very large files are supported; processing time scales with size.
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="privacy">
-                <AccordionTrigger>Who can access my uploads?</AccordionTrigger>
-                <AccordionContent className="text-sm text-muted-foreground">
-                  Only you. Data remains private and deletable.
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+          <div className="p-6 rounded-2xl bg-card shadow">
+            <div className="font-medium">Spreadsheets</div>
+            <p className="text-sm text-muted-foreground mt-2">Index reference tables and rate slabs for lookup.</p>
+          </div>
+          <div className="p-6 rounded-2xl bg-card shadow">
+            <div className="font-medium">Docs & notes</div>
+            <p className="text-sm text-muted-foreground mt-2">Turn scattered notes into indexed answers for faster responses.</p>
           </div>
         </section>
       </main>

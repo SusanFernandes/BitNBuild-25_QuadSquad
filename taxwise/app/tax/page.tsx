@@ -11,124 +11,35 @@ export default function Page() {
   return (
     <BrandThemeWrapper>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-8 grid gap-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Tax</h1>
-          <Button asChild variant="outline">
-            <Link href="/reports?report_type=tax">View Tax Reports</Link>
-          </Button>
-        </div>
-        <TaxAnalysisForm />
-
-        {/* Regime comparison */}
-        <section aria-labelledby="tax-comparison" className="border-t border-border bg-muted/30">
-          <div className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-12 grid gap-6">
-            <h2 id="tax-comparison" className="text-pretty text-xl md:text-2xl font-semibold">
-              Old vs New regime
-            </h2>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Old Regime</CardTitle>
-                  <CardDescription>Deduction-heavy</CardDescription>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground grid gap-2">
-                  <div>• 80C, 80D, HRA, NPS, 24b allowed</div>
-                  <div>• Best if you claim many deductions</div>
-                  <div>• More documentation</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">New Regime</CardTitle>
-                  <CardDescription>Simplified slabs</CardDescription>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground grid gap-2">
-                  <div>• Fewer deductions, lower rates</div>
-                  <div>• Great for low-deduction taxpayers</div>
-                  <div>• Less paperwork</div>
-                </CardContent>
-              </Card>
+      <main className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-12 grid gap-10">
+        <section className="grid md:grid-cols-2 gap-8 items-center animate-fade-in">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-extrabold">Tax analysis & regime comparison</h1>
+            <p className="text-lg text-muted-foreground mt-2">Compare Old vs New regimes and get deduction recommendations tailored to your income and investments.</p>
+            <div className="mt-4">
+              <Button asChild className="bg-gradient-to-r from-indigo-600 to-pink-500 text-white">
+                <Link href="/reports?report_type=tax">View tax reports</Link>
+              </Button>
             </div>
           </div>
-        </section>
 
-        {/* Deductions guide */}
-        <section aria-labelledby="deductions" className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-12">
-          <h2 id="deductions" className="text-pretty text-xl md:text-2xl font-semibold mb-6">
-            Popular deductions explained
-          </h2>
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">80C</CardTitle>
-                <CardDescription>Investments & instruments</CardDescription>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
-                PPF, ELSS, EPF, principal on home loan.
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">80D</CardTitle>
-                <CardDescription>Health insurance</CardDescription>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">Premiums for self, family, parents.</CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">24b</CardTitle>
-                <CardDescription>Home loan interest</CardDescription>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">Interest on self-occupied property.</CardContent>
-            </Card>
+          <div className="p-6 rounded-2xl bg-card shadow animate-fade-in">
+            <TaxAnalysisForm />
           </div>
         </section>
 
-        {/* Pastel accents */}
-        <section aria-labelledby="tax-accents" className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-12">
-          <h2 id="tax-accents" className="text-pretty text-xl md:text-2xl font-semibold mb-4">
-            Pastel tips
-          </h2>
-          <AccentIconRow />
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <OutlineCard accent="green">
-              <div className="text-sm text-muted-foreground">Max 80C with PPF/ELSS/EPF to reduce taxable income.</div>
-            </OutlineCard>
-            <OutlineCard accent="pink">
-              <div className="text-sm text-muted-foreground">
-                Compare regimes yearly—deductions change your break-even.
-              </div>
-            </OutlineCard>
-            <OutlineCard accent="green">
-              <div className="text-sm text-muted-foreground">Track Section 24b interest caps for accurate claims.</div>
-            </OutlineCard>
+        <section className="grid gap-6 md:grid-cols-3">
+          <div className="p-6 rounded-2xl bg-card shadow animate-fade-in">
+            <div className="font-medium">Old Regime</div>
+            <p className="text-sm text-muted-foreground mt-2">Deduction-heavy; ideal when you claim many exemptions and investments.</p>
           </div>
-        </section>
-
-        {/* FAQ */}
-        <section aria-labelledby="tax-faq" className="border-t border-border bg-muted/30">
-          <div className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 lg:px-8 py-12">
-            <h2 id="tax-faq" className="text-pretty text-xl md:text-2xl font-semibold mb-4">
-              Tax FAQ
-            </h2>
-            <Accordion type="single" collapsible>
-              <AccordionItem value="switch">
-                <AccordionTrigger>Can I switch regimes every year?</AccordionTrigger>
-                <AccordionContent className="text-sm text-muted-foreground">
-                  Most salaried individuals can choose each year before filing; consult latest rules.
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="proofs">
-                <AccordionTrigger>What proofs do I need?</AccordionTrigger>
-                <AccordionContent className="text-sm text-muted-foreground">
-                  Receipts and statements for 80C/80D/24b and other claimed deductions.
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-            <div className="mt-6">
-              <Button>Run tax comparison again</Button>
-            </div>
+          <div className="p-6 rounded-2xl bg-card shadow animate-fade-in">
+            <div className="font-medium">New Regime</div>
+            <p className="text-sm text-muted-foreground mt-2">Simplified slabs; fewer deductions but lower paperwork.</p>
+          </div>
+          <div className="p-6 rounded-2xl bg-card shadow animate-fade-in">
+            <div className="font-medium">Deductions guide</div>
+            <p className="text-sm text-muted-foreground mt-2">80C, 80D, 24b and common claim helpers explained simply.</p>
           </div>
         </section>
       </main>

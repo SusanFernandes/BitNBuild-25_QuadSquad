@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { forwardGet } from "../../../../_utils/proxy"
+import { forwardGet } from "../../../_utils/proxy"
 
 export async function GET(request: Request, { params }: { params: { report_id: string } }) {
   try {
@@ -27,6 +27,6 @@ export async function GET(request: Request, { params }: { params: { report_id: s
       return NextResponse.json({ detail: "Upstream returned non-JSON response", body: text.slice(0, 200) }, { status: 502 })
     }
   } catch (e: any) {
-    return NextResponse.json({ detail: "Upstream error" }, { status: 500 })
+    return NextResponse.json({ detail: "Upstream error", error: String(e) }, { status: 500 })
   }
 }

@@ -27,7 +27,10 @@ export function BrandThemeWrapper({ children }: Props) {
   } as React.CSSProperties & Record<string, string>
 
   return (
-    <div style={style} className="min-h-screen bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-indigo-50 via-white to-white dark:from-black/60 dark:via-black/40">
+    <div style={style} className="relative min-h-screen overflow-hidden bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-indigo-50 via-white to-white dark:from-black/60 dark:via-black/40">
+      {/* Aceternity-style decorative blobs (behind content) */}
+      <div className="pointer-events-none absolute left-[-120px] top-[-80px] -z-20 blob blob--lg bg-blob-gradient rounded-full" />
+      <div className="pointer-events-none absolute right-[-80px] bottom-[-60px] -z-20 blob blob--sm bg-gradient-to-tr from-pink-200 via-indigo-100 to-transparent rounded-full opacity-70" />
       {/* animated subtle accent */}
       <div className="pointer-events-none absolute inset-0 -z-10 opacity-60 animate-[pulse_8s_ease-in-out_infinite] bg-gradient-to-br from-indigo-50 via-transparent to-pink-50 dark:from-transparent" />
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

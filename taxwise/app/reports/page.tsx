@@ -41,28 +41,10 @@ export default function ReportsPage() {
     try {
       const offset = loadMore ? reports.length : 0
       const url = `/api/reports/list?limit=20&offset=${offset}${filter && filter !== 'all' ? `&report_type=${filter}` : ''}`
-      const res = await fetch(url)
-      const contentType = res.headers.get("content-type") || ""
-      let data: any = null
-
-      if (res.status === 204) data = null
-      else if (contentType.includes("application/json")) {
-        try {
-          data = await res.json()
-        } catch (err) {
-          throw new Error("Received invalid JSON from server")
-        }
-      } else {
-        const text = await res.text()
-        if (!text) throw new Error("Empty response from server")
-        try {
-          data = JSON.parse(text)
-        } catch (err) {
-          throw new Error("Server returned non-JSON response")
-        }
-      }
-
-      if (!res.ok) throw new Error(data?.detail || `Failed to load reports (status ${res.status})`)
+      // Use centralized safeFetch for robust parsing
+      // lazy import to avoid circulars in case safeFetch is not yet available
+      const { safeFetch } = await import("@/lib/safeFetch")
+      const data = await safeFetch(url)
 
       if (loadMore) {
         setReports(prev => [...prev, ...data.reports])
@@ -170,7 +152,7 @@ export default function ReportsPage() {
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {reports.map((report) => (
-                  <article key={report.id} className="rounded-lg border p-4 bg-card shadow-sm hover:shadow-md transition-shadow">
+                  <article key={report.id} className="rounded-lg border p-4 bg-card shadow-sm hover:shadow-md transition-shadow benzo">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
