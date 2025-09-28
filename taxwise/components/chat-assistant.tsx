@@ -44,8 +44,28 @@ export function ChatAssistant() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       })
-      const data = await res.json()
+      if (res.status === 204) throw new Error("No content returned from server")
+
+      const contentType = (res.headers.get("content-type") || "").toLowerCase()
+      let data: any = null
+
+      if (contentType.includes("application/json")) {
+        try {
+          data = await res.json()
+        } catch (e) {
+          throw new Error("Invalid JSON received from server")
+        }
+      } else {
+        const text = await res.text()
+        try {
+          data = text ? JSON.parse(text) : null
+        } catch (e) {
+          throw new Error(`Unexpected response from server: ${text?.slice(0,200)}`)
+        }
+      }
+
       if (!res.ok) throw new Error(data?.detail || "Chat failed")
+
       setResult(data)
     } catch (e: any) {
       setError(e.message || "Chat failed (check GROQ key on backend)")

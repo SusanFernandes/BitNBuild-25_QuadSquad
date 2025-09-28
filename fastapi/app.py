@@ -764,17 +764,43 @@ async def analyze_cibil(file: UploadFile = File(...)):
         # Check if analysis already exists
         existing_analysis = get_existing_cibil_analysis(file_hash)
         if existing_analysis:
-            print(f"Returning cached CIBIL analysis for file: {file.filename}")
-            return CIBILAnalysis(**existing_analysis)
+            # Validate cache: if critical fields are missing or defaults, reprocess
+            score_ok = existing_analysis.get('current_score') is not None
+            recommendations_ok = bool(existing_analysis.get('recommendations'))
+            improvement_ok = existing_analysis.get('improvement_potential', 0) > 0
+
+            if score_ok or recommendations_ok or improvement_ok:
+                print(f"Returning cached CIBIL analysis for file: {file.filename}")
+                return CIBILAnalysis(**existing_analysis)
+            else:
+                print(f"Cached CIBIL analysis incomplete for file: {file.filename}, reprocessing")
         
         # Extract text from CIBIL report
         if file.filename.endswith('.pdf'):
             text = processor.extract_text_from_pdf(content)
         else:
             text = content.decode('utf-8')
+
+        # Debug: log extracted text length and a short snippet for diagnosis
+        if isinstance(text, str):
+            snippet = text[:500].replace('\n', ' ') if text else ''
+            print(f"Extracted text length={len(text) if text else 0}, snippet={snippet}")
+        else:
+            print(f"Extracted text is not a string: {type(text)}")
         
         # Parse CIBIL data (simplified parsing)
         cibil_data = parse_cibil_report(text)
+
+        # If parsing returned no meaningful CIBIL data, it's likely the uploaded
+        # file is not a credit bureau report (e.g., a bank statement). Return
+        # a clear error instead of saving an empty analysis.
+        if not cibil_data or (not cibil_data.get('score') and not cibil_data.get('credit_utilization') and not cibil_data.get('recent_inquiries')):
+            # Provide a short snippet to help the user verify the file type
+            snippet = (text or '')[:300].replace('\n', ' ')
+            raise HTTPException(status_code=422, detail=(
+                "Unable to extract CIBIL report data. Please upload a CIBIL/credit bureau PDF, not a bank statement. "
+                f"Extracted text snippet: {snippet}"
+            ))
         
         # Analyze factors
         factors = {
@@ -810,9 +836,9 @@ async def analyze_cibil(file: UploadFile = File(...)):
             recommendations,
             min(improvement_potential, 100)
         )
-        
+
         print(f"Saved CIBIL analysis with ID: {analysis_id}")
-        
+
         return CIBILAnalysis(
             current_score=cibil_data.get('score'),
             factors=factors,
@@ -1454,8 +1480,21 @@ async def root():
 
 @app.middleware("http")
 async def log_body(request: Request, call_next):
+    # Read the raw body once (Starlette caches this) and log safely.
     body = await request.body()
-    print("RAW BODY:", body.decode())   # ← will show the form string
+    content_type = request.headers.get("content-type", "")
+    try:
+        decoded = body.decode("utf-8")
+        # Avoid logging extremely large bodies in full
+        if len(decoded) > 1000:
+            print(f"RAW BODY (truncated, len={len(decoded)}, content-type={content_type}):", decoded[:1000])
+        else:
+            print(f"RAW BODY (len={len(decoded)}, content-type={content_type}):", decoded)
+    except UnicodeDecodeError:
+        # Binary or non-UTF-8 payload — log a short hex snippet instead of raising
+        snippet = body[:200]
+        print(f"RAW BODY (binary or non-UTF8, len={len(body)}, content-type={content_type}): {snippet.hex()} ...")
+
     response = await call_next(request)
     return response
 

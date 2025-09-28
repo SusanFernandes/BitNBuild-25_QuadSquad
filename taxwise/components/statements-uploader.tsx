@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,6 +35,7 @@ export default function StatementsUploader() {
   const [error, setError] = useState<string | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,9 +52,29 @@ export default function StatementsUploader() {
         method: "POST",
         body: formData,
       })
-      const data = await res.json()
+
+      if (res.status === 204) throw new Error("No content returned from server")
+
+      const contentType = (res.headers.get("content-type") || "").toLowerCase()
+      let data: any = null
+
+      if (contentType.includes("application/json")) {
+        try {
+          data = await res.json()
+        } catch (e) {
+          throw new Error("Invalid JSON received from server")
+        }
+      } else {
+        const text = await res.text()
+        try {
+          data = text ? JSON.parse(text) : null
+        } catch (e) {
+          throw new Error(`Unexpected response from server: ${text?.slice(0,200)}`)
+        }
+      }
+
       if (!res.ok) {
-        throw new Error(data?.detail || "Upload failed")
+        throw new Error(data?.detail || `Upload failed (status ${res.status})`)
       }
       setTransactions(data.transactions || [])
       setSummary(data.summary || null)
@@ -63,6 +84,15 @@ export default function StatementsUploader() {
       setLoading(false)
     }
   }
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    if (e.dataTransfer.files && e.dataTransfer.files.length) {
+      setFiles(e.dataTransfer.files)
+    }
+  }
+
+  const openFilePicker = () => inputRef.current?.click()
 
   const categoryData = summary ? Object.entries(summary.categories || {}).map(([k, v]) => ({ name: k, value: v })) : []
 
@@ -81,22 +111,38 @@ export default function StatementsUploader() {
       </CardHeader>
       <CardContent className="grid gap-4">
         <form onSubmit={onSubmit} className="grid gap-3">
-          <div className="grid gap-2">
-            <Label htmlFor="files">Files</Label>
-            <Input
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={onDrop}
+            className="rounded-lg border-2 border-dashed border-border p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:scale-[1.01] transition-transform"
+            onClick={openFilePicker}
+          >
+            <input
+              ref={inputRef}
               id="files"
               type="file"
               multiple
               accept=".csv,.xlsx,.xls,.pdf"
               onChange={(e) => setFiles(e.target.files)}
+              className="hidden"
             />
-            <p className="text-xs text-muted-foreground">
-              Max 10MB per file. Required columns are flexible: Date, Description, Amount.
-            </p>
+            <div className="text-foreground font-medium">Drag & drop files here</div>
+            <div className="text-sm text-muted-foreground mt-2">or click to browse — CSV, XLSX, PDF</div>
+            {files && files.length > 0 && (
+              <div className="mt-3 text-sm">
+                {Array.from(files).map((f, i) => (
+                  <div key={i} className="py-1">{f.name} • {(f.size / 1024).toFixed(0)} KB</div>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="flex gap-3">
+
+          <div className="flex items-center gap-3">
             <Button type="submit" disabled={loading}>
               {loading ? "Analyzing…" : "Analyze Statements"}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => { setFiles(null); setTransactions([]); setSummary(null); }}>
+              Clear
             </Button>
             {error && (
               <span className="text-destructive text-sm" role="alert">

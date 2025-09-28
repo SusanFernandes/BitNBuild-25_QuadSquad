@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,6 +28,7 @@ export default function CibilUploader() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<CibilResponse | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,14 +43,30 @@ export default function CibilUploader() {
       const form = new FormData()
       form.set("file", file)
       const res = await fetch("/api/analyze/cibil", { method: "POST", body: form })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.detail || "CIBIL analysis failed")
+      const text = await res.text()
+      let data: any = null
+      try {
+        data = JSON.parse(text)
+      } catch (err) {
+        data = null
+      }
+
+      if (!res.ok) {
+        throw new Error((data && data.detail) || `CIBIL analysis failed (status ${res.status})`)
+      }
+
       setResult(data)
     } catch (err: any) {
       setError(err.message || "CIBIL analysis failed")
     } finally {
       setLoading(false)
     }
+  }
+
+  const openPicker = () => inputRef.current?.click()
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    if (e.dataTransfer.files && e.dataTransfer.files.length) setFile(e.dataTransfer.files[0])
   }
 
   return (
@@ -60,20 +77,17 @@ export default function CibilUploader() {
       </CardHeader>
       <CardContent className="grid gap-4">
         <form onSubmit={onSubmit} className="grid gap-3">
-          <div className="grid gap-2">
-            <Label htmlFor="cibil">CIBIL PDF</Label>
-            <Input id="cibil" type="file" accept=".pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-            <p className="text-xs text-muted-foreground">Only PDF is supported.</p>
+          <div onDragOver={(e) => e.preventDefault()} onDrop={onDrop} onClick={openPicker} className="rounded-lg border-2 border-dashed p-6 text-center cursor-pointer hover:scale-[1.01] transition-transform">
+            <input ref={inputRef} type="file" accept=".pdf" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+            <div className="font-medium">Upload CIBIL PDF</div>
+            <div className="text-sm text-muted-foreground">Drag & drop or click to select</div>
+            {file && <div className="mt-2 text-sm">{file.name} • {(file.size / 1024).toFixed(0)} KB</div>}
           </div>
-          <div className="flex gap-3">
-            <Button type="submit" disabled={loading}>
-              {loading ? "Analyzing…" : "Analyze"}
-            </Button>
-            {error && (
-              <span className="text-destructive text-sm" role="alert">
-                {error}
-              </span>
-            )}
+
+          <div className="flex items-center gap-3">
+            <Button type="submit" disabled={loading}>{loading ? "Analyzing…" : "Analyze"}</Button>
+            <Button type="button" variant="ghost" onClick={() => setFile(null)}>Clear</Button>
+            {error && <div className="text-destructive text-sm">{error}</div>}
           </div>
         </form>
 

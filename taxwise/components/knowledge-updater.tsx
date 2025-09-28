@@ -41,9 +41,29 @@ export default function KnowledgeUpdater() {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: form.toString(),
       })
-      const data: Resp = await res.json()
+
+      if (res.status === 204) throw new Error("No content returned from server")
+
+      const contentType = (res.headers.get("content-type") || "").toLowerCase()
+      let data: Resp | null = null
+
+      if (contentType.includes("application/json")) {
+        try {
+          data = await res.json()
+        } catch (e) {
+          throw new Error("Invalid JSON received from server")
+        }
+      } else {
+        const text = await res.text()
+        try {
+          data = text ? JSON.parse(text) : null
+        } catch (e) {
+          throw new Error(`Unexpected response from server: ${text?.slice(0,200)}`)
+        }
+      }
+
       if (!res.ok) throw new Error((data as any)?.detail || "Update failed")
-      setMessage(data.message || "Updated knowledge base.")
+      setMessage((data as any)?.message || "Updated knowledge base.")
     } catch (err: any) {
       setError(err.message || "Update failed")
     } finally {

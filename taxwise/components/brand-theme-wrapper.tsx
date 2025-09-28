@@ -26,5 +26,13 @@ export function BrandThemeWrapper({ children }: Props) {
     ["--accent-outline-green" as any]: "#4CAF50",
   } as React.CSSProperties & Record<string, string>
 
-  return <div style={style}>{children}</div>
+  return (
+    <div style={style} className="min-h-screen bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-indigo-50 via-white to-white dark:from-black/60 dark:via-black/40">
+      {/* animated subtle accent */}
+      <div className="pointer-events-none absolute inset-0 -z-10 opacity-60 animate-[pulse_8s_ease-in-out_infinite] bg-gradient-to-br from-indigo-50 via-transparent to-pink-50 dark:from-transparent" />
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        {children}
+      </div>
+    </div>
+  )
 }

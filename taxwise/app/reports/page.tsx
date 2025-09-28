@@ -42,9 +42,27 @@ export default function ReportsPage() {
       const offset = loadMore ? reports.length : 0
       const url = `/api/reports/list?limit=20&offset=${offset}${filter && filter !== 'all' ? `&report_type=${filter}` : ''}`
       const res = await fetch(url)
-      const data = await res.json()
+      const contentType = res.headers.get("content-type") || ""
+      let data: any = null
 
-      if (!res.ok) throw new Error(data.detail || "Failed to load reports")
+      if (res.status === 204) data = null
+      else if (contentType.includes("application/json")) {
+        try {
+          data = await res.json()
+        } catch (err) {
+          throw new Error("Received invalid JSON from server")
+        }
+      } else {
+        const text = await res.text()
+        if (!text) throw new Error("Empty response from server")
+        try {
+          data = JSON.parse(text)
+        } catch (err) {
+          throw new Error("Server returned non-JSON response")
+        }
+      }
+
+      if (!res.ok) throw new Error(data?.detail || `Failed to load reports (status ${res.status})`)
 
       if (loadMore) {
         setReports(prev => [...prev, ...data.reports])
@@ -142,82 +160,48 @@ export default function ReportsPage() {
             </Card>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Your Reports</CardTitle>
-              <CardDescription>
-                {reports.length} report{reports.length !== 1 ? 's' : ''} found
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading && reports.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">Loading reports...</p>
-              ) : reports.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">
-                  No reports found. Try uploading statements or running analyses.
-                </p>
-              ) : (
-                <>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Created</TableHead>
-                        <TableHead>Details</TableHead>
-                        <TableHead>File</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {reports.map((report) => (
-                        <TableRow key={report.id}>
-                          <TableCell>
-                            <Badge className={getReportTypeColor(report.type)}>
-                              {report.type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {new Date(report.created_date).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {formatSummary(report)}
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {report.filename || '-'}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button asChild variant="outline" size="sm">
-                                <Link href={`/reports/${report.type}/${report.id}`}>
-                                  View
-                                </Link>
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDelete(report.type, report.id)}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                Delete
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+          <div>
+            <div className="mb-4 text-sm text-muted-foreground">{reports.length} report{reports.length !== 1 ? 's' : ''} found</div>
 
-                  {hasMore && (
-                    <div className="flex justify-center mt-6">
-                      <Button onClick={() => loadReports(true)} disabled={loading}>
-                        Load More
-                      </Button>
+            {loading && reports.length === 0 ? (
+              <p className="text-center py-8 text-muted-foreground">Loading reports...</p>
+            ) : reports.length === 0 ? (
+              <p className="text-center py-8 text-muted-foreground">No reports found. Try uploading or running analyses.</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {reports.map((report) => (
+                  <article key={report.id} className="rounded-lg border p-4 bg-card shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Badge className={getReportTypeColor(report.type)}>{report.type}</Badge>
+                          <div className="text-xs text-muted-foreground">{new Date(report.created_date).toLocaleDateString()}</div>
+                        </div>
+                        <h3 className="mt-3 font-medium text-lg">{report.filename || (report.type + ' report')}</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">{formatSummary(report)}</p>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="text-xs text-muted-foreground">{report.summary && report.summary.annual_income ? `₹${(report.summary.annual_income||0).toLocaleString()}` : ''}</div>
+                        <div className="flex gap-2">
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={`/reports/${report.type}/${report.id}`}>Open</Link>
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleDelete(report.type, report.id)} className="text-destructive">Delete</Button>
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
+                  </article>
+                ))}
+              </div>
+            )}
+
+            {hasMore && (
+              <div className="flex justify-center mt-6">
+                <Button onClick={() => loadReports(true)} disabled={loading}>Load More</Button>
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </BrandThemeWrapper>

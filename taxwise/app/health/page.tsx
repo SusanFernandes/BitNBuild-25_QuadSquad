@@ -7,7 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { AccentIconRow, OutlineCard } from "@/components/pastel-accents"
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
+import { swrFetcher } from "@/lib/safeFetch"
+
+// Use centralized swrFetcher which wraps fetch with robust parsing and error messages
+const fetcher = swrFetcher
 
 export default function Page() {
   const { data, error, isLoading } = useSWR("/api/health", fetcher)

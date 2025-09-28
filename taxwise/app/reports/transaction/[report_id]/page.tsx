@@ -46,9 +46,30 @@ export default function TransactionReportPage() {
     const loadReport = async () => {
       try {
         const res = await fetch(`/api/reports/transaction/${reportId}`)
-        const data = await res.json()
 
-        if (!res.ok) throw new Error(data.detail || "Failed to load report")
+        if (res.status === 204) {
+          throw new Error("No content returned from server")
+        }
+
+        const contentType = (res.headers.get("content-type") || "").toLowerCase()
+        let data: any = null
+
+        if (contentType.includes("application/json")) {
+          try {
+            data = await res.json()
+          } catch (e) {
+            throw new Error("Invalid JSON received from server")
+          }
+        } else {
+          const text = await res.text()
+          try {
+            data = JSON.parse(text)
+          } catch (e) {
+            throw new Error(`Unexpected response from server: ${text?.slice(0,200)}`)
+          }
+        }
+
+        if (!res.ok) throw new Error(data?.detail || "Failed to load report")
 
         setReport(data)
       } catch (err: any) {

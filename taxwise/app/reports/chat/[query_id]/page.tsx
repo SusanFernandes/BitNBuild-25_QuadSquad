@@ -31,9 +31,30 @@ export default function ChatReportPage() {
     const loadReport = async () => {
       try {
         const res = await fetch(`/api/reports/chat/${queryId}`)
-        const data = await res.json()
 
-        if (!res.ok) throw new Error(data.detail || "Failed to load report")
+        const contentType = res.headers.get("content-type") || ""
+        let data: any = null
+
+        if (res.status === 204) {
+          data = null
+        } else if (contentType.includes("application/json")) {
+          try {
+            data = await res.json()
+          } catch (err) {
+            throw new Error("Received invalid JSON from server")
+          }
+        } else {
+          // try text and parse as JSON as a fallback
+          const text = await res.text()
+          if (!text) throw new Error("Empty response from server")
+          try {
+            data = JSON.parse(text)
+          } catch (err) {
+            throw new Error("Server returned non-JSON response")
+          }
+        }
+
+        if (!res.ok) throw new Error((data && data.detail) || `Failed to load report (status ${res.status})`)
 
         setReport(data)
       } catch (err: any) {
